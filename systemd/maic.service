@@ -1,0 +1,15 @@
+[Unit]
+Description=mAIcrophone dictation daemon
+After=graphical-session.target pipewire.service wireplumber.service
+PartOf=graphical-session.target
+
+[Service]
+Type=simple
+ExecStart=%h/.local/bin/maic daemon
+Restart=on-failure
+RestartSec=1
+Environment=MAIC_LOG=INFO
+Environment=LD_PRELOAD=/usr/lib/libgtk4-layer-shell.so
+
+[Install]
+WantedBy=graphical-session.target

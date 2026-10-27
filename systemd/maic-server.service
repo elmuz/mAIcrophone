@@ -1,0 +1,13 @@
+[Unit]
+Description=NeMo-Speech ASR server for mAIcrophone
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/nemo-speech serve --asr-model nemotron-3.5 --host 127.0.0.1 --port 8080 --asr.streaming.rnnt_right_context 6
+Restart=on-failure
+RestartSec=2
+Nice=5
+
+[Install]
+WantedBy=default.target

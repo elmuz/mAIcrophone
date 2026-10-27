@@ -1,0 +1,39 @@
+[server]
+# WebSocket endpoint of `nemo-speech serve`
+url = "ws://127.0.0.1:8080/v1/audio/transcriptions/realtime"
+
+[audio]
+# Empty = PipeWire default source. Otherwise a source name from `wpctl status`.
+source = ""
+sample_rate = 16000
+chunk_ms = 100
+
+[asr]
+language = "auto"
+punctuation = true
+
+[overlay]
+enabled = true
+width_percent = 70
+max_width_px = 1000
+max_height_percent = 30
+margin_px = 24
+font = "monospace 12"
+
+[injection]
+# wtype | clipboard | both (copy_to_clipboard controls the clipboard side)
+method = "wtype"
+copy_to_clipboard = true
+primary_selection = true
+return_to_target = true
+multiline = "space"          # space | shift-enter | clipboard
+long_text_threshold = 400
+
+[replacements]
+"Pipewire" = "PipeWire"
+"Pypewaier" = "PipeWire"
+"System D" = "systemd"
+"System di" = "systemd"
+"Enemmotron" = "Nemotron"
+"Nemotrone" = "Nemotron"
+"Vtype" = "wtype"

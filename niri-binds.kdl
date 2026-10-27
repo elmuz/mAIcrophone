@@ -1,0 +1,4 @@
+// Choose keys that do not conflict with your current niri config.
+// Example only:
+Mod+Alt+V       { spawn "maic" "toggle"; }
+Mod+Alt+Shift+V { spawn "maic" "cancel"; }
