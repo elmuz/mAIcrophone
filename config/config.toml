@@ -9,7 +9,8 @@ sample_rate = 16000
 chunk_ms = 100
 
 [asr]
-language = "auto"
+# Per-session language. Use "auto" for model-based detection.
+language = "en-US"
 punctuation = true
 
 [overlay]

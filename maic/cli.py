@@ -65,7 +65,12 @@ def _request(command: str, **extra) -> dict:
 
 def _print_response(response: dict) -> int:
     if response.get("ok"):
-        print(response.get("state", "ok"))
+        if "state" in response:
+            print(response["state"])
+        elif "language" in response:
+            print(response["language"])
+        else:
+            print("ok")
         return 0
     print(f"maic: {response.get('error', 'unknown error')}", file=sys.stderr)
     return 1
@@ -125,6 +130,8 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser("stop", help="stop recording and commit")
     sub.add_parser("cancel", help="discard the current recording")
     sub.add_parser("status", help="print daemon state")
+    language_cmd = sub.add_parser("language", help="get or set the ASR language")
+    language_cmd.add_argument("code", nargs="?", help="e.g. en-US, it-IT, auto")
     type_cmd = sub.add_parser("type", help="type text via the daemon (diagnostic)")
     type_cmd.add_argument("text")
 
@@ -145,6 +152,8 @@ def main(argv: list[str] | None = None) -> int:
     try:
         if args.command == "toggle":
             response = _request("toggle", clipboard=args.clipboard)
+        elif args.command == "language":
+            response = _request("language", language=args.code or "")
         elif args.command == "type":
             response = _request("type", text=args.text)
         else:

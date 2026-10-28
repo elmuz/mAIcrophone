@@ -131,7 +131,15 @@ class Daemon:
     async def dispatch(self, request: dict) -> dict:
         command = str(request.get("command", ""))
         if command == "status":
-            return {"ok": True, "state": self.state}
+            return {"ok": True, "state": self.state, "language": self.cfg.language}
+        if command == "language":
+            code = str(request.get("language", "")).strip()
+            if not code:
+                return {"ok": True, "language": self.cfg.language}
+            self.cfg.language = code
+            self.overlay.set_language(code)
+            log.info("language set to %s", code)
+            return {"ok": True, "language": code}
         if command == "toggle":
             if self.state == "idle":
                 self._start_session(copy=bool(request.get("clipboard", False)))

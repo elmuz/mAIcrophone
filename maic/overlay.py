@@ -64,6 +64,13 @@ def vu_bar(rms: float, width: int = 14) -> str:
     return "█" * filled + " " * (width - filled)
 
 
+def language_label(code: str) -> str:
+    code = (code or "auto").strip()
+    if code.lower() == "auto":
+        return "AUTO"
+    return code.split("-")[0].upper()
+
+
 class Overlay:
     def __init__(self, cfg: Config):
         self.cfg = cfg
@@ -78,6 +85,7 @@ class Overlay:
         self._last_text = ""
         self._last_rms = 0.0
         self._state = "idle"
+        self.language = language_label(cfg.language)
         self._build()
 
     def _build(self) -> None:
@@ -183,10 +191,13 @@ class Overlay:
         self._state = state
         self._last_text = ""
         self._last_rms = 0.0
-        self.status.set_text(f"{state}  {vu_bar(0)}")
+        self.status.set_text(self._status_text(state, 0.0))
         self._apply_text("")
         self.window.set_visible(True)
         return False
+
+    def _status_text(self, state: str, rms: float) -> str:
+        return f"{state:<6} {vu_bar(rms)}  {self.language}"
 
     def start(self, output: OutputInfo) -> None:
         GLib.idle_add(self._start_ui, output, "REC")
@@ -208,7 +219,7 @@ class Overlay:
     def _update_level(self, rms: float) -> bool:
         if not self.window or not self.window.get_visible() or self.status is None:
             return False
-        self.status.set_text(f"{self._state}  {vu_bar(rms)}")
+        self.status.set_text(self._status_text(self._state, rms))
         return False
 
     def set_state(self, state: str) -> None:
@@ -217,7 +228,16 @@ class Overlay:
 
     def _update_state(self, state: str) -> bool:
         if self.status is not None:
-            self.status.set_text(f"{state}  {vu_bar(self._last_rms)}")
+            self.status.set_text(self._status_text(state, self._last_rms))
+        return False
+
+    def set_language(self, code: str) -> None:
+        self.language = language_label(code)
+        GLib.idle_add(self._update_language)
+
+    def _update_language(self) -> bool:
+        if self.status is not None:
+            self.status.set_text(self._status_text(self._state, self._last_rms))
         return False
 
     def show_error(self, message: str, timeout_ms: int = 5000) -> None:
@@ -226,7 +246,7 @@ class Overlay:
     def _show_error_ui(self, message: str, timeout_ms: int) -> bool:
         if not self.window or not self.status or not self.text:
             return False
-        self.status.set_text("ERR")
+        self.status.set_text(self._status_text("ERR", self._last_rms))
         self.text.set_text(message)
         self.text.add_css_class("maic-error")
         self.window.set_size_request(self.width, 100)
@@ -267,6 +287,7 @@ class NullOverlay:
     def set_partial(self, text): pass
     def set_level(self, rms): pass
     def set_state(self, state): pass
+    def set_language(self, code): pass
     def show_error(self, message, timeout_ms=5000): pass
     def hide(self): pass
     def destroy(self): pass

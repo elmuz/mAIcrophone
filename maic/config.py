@@ -9,7 +9,7 @@ from pathlib import Path
 @dataclass
 class Config:
     server_url: str = "ws://127.0.0.1:8080/v1/audio/transcriptions/realtime"
-    language: str = "auto"
+    language: str = "en-US"
     punctuation: bool = True
     audio_source: str = ""
     sample_rate: int = 16000

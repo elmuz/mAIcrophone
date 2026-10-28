@@ -15,6 +15,7 @@ focused when recording started.
 - `pipewire` (`pw-record`)
 - `wtype`, `wl-copy`
 - `nemo-speech` with `nemotron-3.5`
+- optional: cased ITN grammars for inverse text normalization
 
 Install the GTK layer-shell package:
 
@@ -41,6 +42,23 @@ python -m venv --system-site-packages .venv
 pip install -e .
 ```
 
+## Inverse text normalization
+
+Install the cased Sparrowhawk ITN grammars once. The archive is small and
+includes English and several other languages. Grammars are loaded lazily.
+Note: in NeMo-Speech 0.2.0 the Italian (`it`) grammar directory is present but
+empty, so Italian ITN is not available yet.
+
+```bash
+mkdir -p ~/.local/share/nemo-speech/itn
+curl -fL \
+  https://github.com/NVIDIA/NeMo-Speech.cpp/releases/download/v0.2.0/itn_configs_cased.tar.bz2 \
+  -o /tmp/itn_configs_cased.tar.bz2
+tar -xjf /tmp/itn_configs_cased.tar.bz2 \
+  -C ~/.local/share/nemo-speech/itn \
+  --strip-components=1
+```
+
 ## Run
 
 Start the ASR server:
@@ -49,7 +67,8 @@ Start the ASR server:
 nemo-speech serve \
   --asr-model nemotron-3.5 \
   --host 127.0.0.1 --port 8080 \
-  --asr.streaming.rnnt_right_context 6
+  --asr.streaming.rnnt_right_context 6 \
+  --itn-model-dir ~/.local/share/nemo-speech/itn
 ```
 
 Start the daemon:
@@ -64,6 +83,10 @@ In another shell:
 maic status
 maic toggle     # start; call again to stop and type
 maic cancel     # discard current recording
+maic language   # show the current ASR language
+maic language en-US
+maic language it-IT
+maic language auto
 maic type "hello"   # diagnostic: type directly via the daemon
 ```
 
@@ -91,6 +114,10 @@ The daemon connects to the server URL from config. It checks `/ready` before
 starting a recording, so an offline server fails immediately instead of after
 you finish speaking.
 
+The default language is `en-US`. Language is a per-session setting: changing it
+with `maic language` affects the next dictation without restarting the ASR
+server. The overlay shows `EN`, `IT`, or `AUTO` in its status row.
+
 By default, the final transcript is copied to both the regular clipboard and
 the PRIMARY selection (middle-click paste). Set `primary_selection = false` if
 you do not want that.
@@ -111,5 +138,6 @@ systemctl --user enable --now maic.service
 - Niri only.
 - Overlay is capped at 30% of the monitor height; no scrolling yet.
 - Newlines are flattened to spaces by default.
-- No history, no endpointing, no runtime language switching.
+- No history and no endpointing yet.
+- Language switching is CLI-only; there is no overlay selector yet.
 - Partial text is best-effort; the final transcript is authoritative.

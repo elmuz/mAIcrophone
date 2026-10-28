@@ -52,7 +52,8 @@ maic CLI  --Unix socket-->  maic daemon
   - close overlay.
 - Partial text is **not** typed into the target app.
 - One final transcript per session. No endpointing/multiple finals in v1.
-- `language=auto` in v1; no runtime language switcher.
+- `language=en-US` by default; per-session switching via `maic language`;
+  overlay shows an `EN`/`IT`/`AUTO` badge.
 - Clipboard fallback if injection fails or focus changed.
 - Overlay appears on the **currently focused monitor** at recording start.
 - Overlay grows to show the whole transcript where practical.
@@ -121,7 +122,7 @@ Rules:
 - Send 100 ms frames (3200 bytes).
 - `session.update` before the first audio frame:
   - `sample_rate: 16000`
-  - `language: auto`
+  - `language: en-US` (or the current `maic language` value)
   - `automatic_punctuation: true`
 - On stop:
   1. stop capture,
@@ -138,6 +139,7 @@ Server-side settings (not client config):
 
 ```text
 asr.streaming.rnnt_right_context = 6
+asr.postproc.itn_model_dir = ~/.local/share/nemo-speech/itn
 speech_contexts / word boosting = off in v1
 ```
 
@@ -265,7 +267,7 @@ sample_rate = 16000
 chunk_ms = 100
 
 [asr]
-language = "auto"
+language = "en-US"     # en-US | it-IT | auto
 punctuation = true
 context = []             # word boosting disabled by default in v1
 
@@ -343,7 +345,8 @@ primary feedback surface.
 4. **Focus-change behaviour**
    - abort + clipboard (recommended), or type anyway, or ask via overlay.
 5. **MVP scope**
-   - Niri only, one monitor, auto language, one final per session, no history.
+   - Niri only, one monitor, explicit language by default, one final per session,
+     no history.
 6. **Fallback policy**
    - wtype primary; clipboard on failure/focus change (recommended).
 7. **Server lifecycle**
@@ -358,8 +361,8 @@ primary feedback surface.
 5. Niri focus guard + clipboard fallback.
 6. Systemd units + config + niri bind snippet.
 
-Do not add endpointing, history, non-Niri support, language switching, or native
-PipeWire bindings until this slice works end to end.
+Do not add endpointing, history, non-Niri support, or native PipeWire bindings
+until this slice works end to end.
 
 ## 14. Contracts that deserve deeper definition
 
