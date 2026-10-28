@@ -63,12 +63,20 @@ def normalize_text(text: str, cfg: Config) -> str:
     return text
 
 
-async def copy_to_clipboard(text: str, cfg: Config) -> None:
+async def copy_to_clipboard(text: str, cfg: Config) -> bool:
     data = text.encode("utf-8")
+    ok = True
     if cfg.copy_to_clipboard:
-        await _run_detached("wl-copy", stdin=data)
+        rc = await _run_detached("wl-copy", stdin=data)
+        if rc != 0:
+            log.warning("wl-copy failed (%s)", rc)
+            ok = False
     if cfg.primary_selection:
-        await _run_detached("wl-copy", "--primary", stdin=data)
+        rc = await _run_detached("wl-copy", "--primary", stdin=data)
+        if rc != 0:
+            log.warning("wl-copy --primary failed (%s)", rc)
+            ok = False
+    return ok
 
 
 async def _wtype_text(text: str) -> tuple[int, bytes, bytes]:

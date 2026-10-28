@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 from html import escape
+import math
 
+import cairo
 import gi
 
 gi.require_version("Gtk", "4.0")
@@ -44,20 +46,28 @@ def _load_layer_shell():
     return layer_shell
 
 
-def vu_bar(rms: float, width: int = 14) -> str:
-    if rms <= 0:
+def meter_level(value: float) -> float:
+    """Map a PCM peak sample to a 0..1 meter using dBFS."""
+    if value <= 0:
+        return 0.0
+    dbfs = 20.0 * math.log10(min(value, 32768.0) / 32768.0)
+    return min(1.0, max(0.0, (dbfs + 60.0) / 60.0))
+
+
+def vu_bar(value: float, width: int = 14) -> str:
+    level = meter_level(value)
+    if level <= 0:
         return " " * width
-    level = min(1.0, max(0.0, (rms / 2500.0) ** 0.5))
     filled = int(round(level * width))
     return "█" * filled + " " * (width - filled)
 
 
-def vu_bar_markup(rms: float, width: int = 14) -> str:
-    if rms <= 0:
+def vu_bar_markup(value: float, width: int = 14) -> str:
+    level = meter_level(value)
+    if level <= 0:
         return " " * width
-    level = min(1.0, max(0.0, (rms / 2500.0) ** 0.5))
     filled = int(round(level * width))
-    green_end = int(width * 0.60)
+    green_end = int(width * 0.65)
     yellow_end = int(width * 0.85)
     chars = []
     for i in range(width):
@@ -104,7 +114,7 @@ class Overlay:
         self.text: Gtk.Label | None = None
         self.scroll: Gtk.ScrolledWindow | None = None
         self.width = 800
-        self.content_width = 772
+        self.content_width = 760
         self.max_height = 400
         self.output: OutputInfo | None = None
         self._hide_source: int | None = None
@@ -172,6 +182,7 @@ scrollbar {{
         self.window.set_resizable(False)
         self.window.set_can_focus(False)
         self.window.set_can_target(False)
+        self.window.connect("realize", self._on_realize)
 
         outer = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
         outer.add_css_class("maic-box")
@@ -223,6 +234,11 @@ scrollbar {{
         )
         self.window.set_visible(False)
 
+    def _on_realize(self, window) -> None:
+        surface = window.get_surface()
+        if surface is not None:
+            surface.set_input_region(cairo.Region())
+
     def _find_monitor(self, output_name: str):
         display = Gdk.Display.get_default()
         if display is None:
@@ -273,7 +289,7 @@ scrollbar {{
             self.text.add_css_class(f"font-step-{step}")
 
         line_height = self._line_height(font_size)
-        chrome_height = 52
+        chrome_height = 56
         available_lines = max(1, (self.max_height - chrome_height) // line_height)
         visible_lines = max(
             1, min(lines, self.cfg.overlay_max_lines, available_lines)
@@ -348,7 +364,7 @@ scrollbar {{
             self.cfg.overlay_max_width_px,
             max(320, int(output.width * self.cfg.overlay_width_percent / 100)),
         )
-        self.content_width = self.width - 28
+        self.content_width = self.width - 40
         self.max_height = max(
             120, int(output.height * self.cfg.overlay_max_height_percent / 100)
         )

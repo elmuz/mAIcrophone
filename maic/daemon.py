@@ -340,10 +340,13 @@ class Daemon:
                     return
                 focused = await current_focused_id()
                 log.info("focus before injection: %s (target %s)", focused, target.id)
-                if focused != target.id:
-                    log.info("returning focus to target window %s", target.id)
-                    await focus_window(target.id)
-                    await asyncio.sleep(0.15)
+                if not await self._ensure_target_focus(target.id):
+                    await self._fail(
+                        "could not refocus target; transcript copied to clipboard",
+                        session,
+                    )
+                    return
+                log.info("focus confirmed after %.2fs", time.monotonic() - stop_started)
 
             self.state = "injecting"
             self.overlay.set_state("TYPE")
@@ -382,6 +385,18 @@ class Daemon:
             self.session = None
             self._session_task = None
 
+    async def _ensure_target_focus(self, window_id: int, timeout: float = 1.0) -> bool:
+        if await current_focused_id() == window_id:
+            return True
+        if not await focus_window(window_id):
+            return False
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            if await current_focused_id() == window_id:
+                return True
+            await asyncio.sleep(0.05)
+        return False
+
     def _on_asr_error(self, session: Session, message: str) -> None:
         session.error_message = message
         session.error_event.set()
@@ -393,7 +408,7 @@ class Daemon:
                 if not data:
                     break
                 stats = AudioCapture.stats(data)
-                self.overlay.set_level(stats.rms)
+                self.overlay.set_level(stats.peak)
                 await asr.send_audio(data)
         except asyncio.CancelledError:
             raise
