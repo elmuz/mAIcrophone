@@ -54,6 +54,8 @@ class Daemon:
         self.thread = threading.Thread(target=self._run_loop, name="maic-asyncio", daemon=True)
         self.ipc_server: asyncio.AbstractServer | None = None
         self._session_task: asyncio.Task | None = None
+        self._server_task: asyncio.Task | None = None
+        self.server_ready: bool | None = None
         self._keep_error = False
         self._started = threading.Event()
 
@@ -65,6 +67,23 @@ class Daemon:
         self.thread.start()
         future = asyncio.run_coroutine_threadsafe(self._start_ipc(), self.loop)
         future.result(timeout=3)
+        self.loop.call_soon_threadsafe(self._start_polling)
+
+    def _start_polling(self) -> None:
+        self._server_task = self.loop.create_task(self._poll_server())
+
+    async def _poll_server(self) -> None:
+        while True:
+            ready, _ = await check_ready(self.cfg)
+            self._set_server_ready(ready)
+            await asyncio.sleep(max(1, self.cfg.server_poll_seconds))
+
+    def _set_server_ready(self, ready: bool) -> None:
+        status = "online" if ready else "offline"
+        self.overlay.set_server_status(status)
+        if self.server_ready != ready:
+            self.server_ready = ready
+            log.info("ASR server %s", status)
 
     def stop(self) -> None:
         if self.loop.is_running():
@@ -84,6 +103,13 @@ class Daemon:
                 await asyncio.wait_for(self._session_task, timeout=3)
             except Exception:
                 self._session_task.cancel()
+        if self._server_task is not None:
+            self._server_task.cancel()
+            try:
+                await self._server_task
+            except asyncio.CancelledError:
+                pass
+            self._server_task = None
         if self.ipc_server is not None:
             self.ipc_server.close()
             await self.ipc_server.wait_closed()
@@ -224,8 +250,10 @@ class Daemon:
                 return
             self.overlay.start(output)
             self.overlay.set_state("CHECK")
+            self.overlay.set_server_status("checking")
 
             ready, message = await check_ready(self.cfg)
+            self._set_server_ready(ready)
             if not ready:
                 await self._fail(message)
                 return

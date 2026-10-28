@@ -1,6 +1,8 @@
 [server]
 # WebSocket endpoint of `nemo-speech serve`
 url = "ws://127.0.0.1:8080/v1/audio/transcriptions/realtime"
+# How often the daemon refreshes the overlay server indicator.
+poll_seconds = 5
 
 [audio]
 # Empty = PipeWire default source. Otherwise a source name from `wpctl status`.
@@ -15,11 +17,17 @@ punctuation = true
 
 [overlay]
 enabled = true
-width_percent = 70
-max_width_px = 1000
+width_percent = 75
+max_width_px = 2000
 max_height_percent = 30
-margin_px = 24
-font = "monospace 12"
+margin_px = 56
+font = "FiraCode Nerd Font Mono 13"
+max_lines = 10
+min_font_size = 11
+font_steps = 3
+corner_radius = 10
+border_width = 1
+background_opacity = 0.94
 
 [injection]
 # wtype | clipboard | both (copy_to_clipboard controls the clipboard side)

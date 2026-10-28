@@ -169,21 +169,24 @@ Properties:
 - anchored bottom centre of the **focused output** at recording start,
 - output selected with `niri msg --json focused-output` (`name` + `logical`
   width/height),
-- width: min(70% of output width, ~1000 px),
+- width: min(75% of output width, ~2000 px),
 - height: dynamic, grows upward from the bottom margin,
 - max height: ~30% of the output's logical height,
+- bottom margin around 56 px,
 - `keyboard-interactivity = none`,
 - empty input region, so clicks pass through,
-- monospace / TUI-like styling,
-- background with slight transparency,
-- VU as Unicode blocks (`▁▂▃▄▅▆▇█`) or simple block bar,
+- monospace / TUI-like styling with Nord colours,
+- rounded corners, thin border, slightly transparent background,
+- status row: state, coloured VU meter, language, ASR server status,
 - partial text wraps; the entire partial is shown, not a subtitle-style tail.
 
-Long-text policy (needs confirmation):
+Long-text policy:
 
 - Try to fit all text by growing the surface up to the max height (30%).
-- If it still does not fit, reduce font size in at most 2–3 discrete steps.
-- If it still does not fit, keep the newest lines visible. No scrolling in v1.
+- Show up to about 10 lines at the base font size.
+- If reducing font size by 1–3 steps makes the transcript fit, do that.
+- Otherwise keep the newest lines visible and auto-scroll to the bottom.
+- No manual scrolling.
 - Do not reserve space for silence/pauses; only actual transcript text is shown.
 
 The overlay stays on the output where recording started, permanently for that
@@ -272,15 +275,22 @@ punctuation = true
 context = []             # word boosting disabled by default in v1
 
 [overlay]
-width_percent = 70
-max_width_px = 900
-margin_px = 24
-font = "monospace 12"
+width_percent = 75
+max_width_px = 2000
+max_height_percent = 30
+margin_px = 56
+font = "FiraCode Nerd Font Mono 13"
+max_lines = 10
+min_font_size = 11
+font_steps = 3
+corner_radius = 10
+border_width = 1
+background_opacity = 0.94
 
 [injection]
 method = "wtype"         # wtype | clipboard | both
 copy_to_clipboard = true # user preference: keep transcript on clipboard
-primary_selection = false
+primary_selection = true
 return_to_target = true
 multiline = "space"      # space | shift-enter | clipboard
 long_text_threshold = 400

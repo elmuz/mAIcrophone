@@ -118,6 +118,13 @@ The default language is `en-US`. Language is a per-session setting: changing it
 with `maic language` affects the next dictation without restarting the ASR
 server. The overlay shows `EN`, `IT`, or `AUTO` in its status row.
 
+The overlay uses a compact Nord-themed status row with state, coloured VU meter,
+language, and ASR server status. It grows up to 30% of the monitor height, keeps
+about 10 lines visible, and automatically scrolls to the newest text. Font size
+is reduced only when doing so makes the whole transcript fit; otherwise the
+newest text remains visible. Geometry and typography are configurable under
+`[overlay]`.
+
 By default, the final transcript is copied to both the regular clipboard and
 the PRIMARY selection (middle-click paste). Set `primary_selection = false` if
 you do not want that.
@@ -136,8 +143,10 @@ systemctl --user enable --now maic.service
 ## Current limitations
 
 - Niri only.
-- Overlay is capped at 30% of the monitor height; no scrolling yet.
+- Overlay is capped at 30% of the monitor height; long text auto-scrolls to the
+  newest lines, with no manual scrolling.
 - Newlines are flattened to spaces by default.
 - No history and no endpointing yet.
 - Language switching is CLI-only; there is no overlay selector yet.
 - Partial text is best-effort; the final transcript is authoritative.
+- Deterministic/manual punctuation insertion is not implemented yet.
