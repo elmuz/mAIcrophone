@@ -13,6 +13,7 @@ from gi.repository import Gdk, GLib, Gtk, Pango  # noqa: E402
 
 from .config import Config  # noqa: E402
 from .niri import OutputInfo  # noqa: E402
+from .overlay_null import NullOverlay  # noqa: E402,F401
 
 NORD_BG = "#2E3440"
 NORD_BORDER = "#4C566A"
@@ -478,14 +479,3 @@ scrollbar {{
             self.window = None
         return False
 
-
-class NullOverlay:
-    def start(self, output): pass
-    def set_partial(self, text): pass
-    def set_level(self, rms): pass
-    def set_state(self, state): pass
-    def set_language(self, code): pass
-    def set_server_status(self, status): pass
-    def show_error(self, message, timeout_ms=5000): pass
-    def hide(self): pass
-    def destroy(self): pass

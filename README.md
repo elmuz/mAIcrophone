@@ -42,6 +42,15 @@ python -m venv --system-site-packages .venv
 pip install -e .
 ```
 
+Run the test suite (uses only the standard library):
+
+```bash
+python -m unittest discover -s tests -v
+```
+
+The CLI and `maic daemon --no-overlay` do not import GTK; only the overlay
+path requires `python-gobject`, `gtk4`, and `gtk4-layer-shell`.
+
 ## Inverse text normalization
 
 Install the cased Sparrowhawk ITN grammars once. The archive is small and

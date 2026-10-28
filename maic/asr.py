@@ -12,6 +12,47 @@ from .config import Config
 
 log = logging.getLogger("maic.asr")
 
+# A delta that shares at least this many leading characters with the currently
+# displayed partial is treated as a revision (a full replacement), not as a
+# new suffix. Very short matches are ambiguous and append like normal suffixes.
+_MIN_REVISION_PREFIX = 3
+
+
+def longest_common_prefix(a: str, b: str) -> int:
+    """Return the length of the common leading substring of *a* and *b*."""
+    limit = min(len(a), len(b))
+    i = 0
+    while i < limit and a[i] == b[i]:
+        i += 1
+    return i
+
+
+def reconcile_partial(previous: str, delta: str) -> str:
+    """Merge a streaming ASR delta into the currently displayed partial.
+
+    The server emits ``delta`` in two shapes:
+
+    * a suffix of newly recognised words (the common case), or
+    * a complete replacement partial when earlier words are revised.
+
+    Blindly appending would corrupt the overlay after a revision. A replacement
+    usually starts with the old partial (an extension) or keeps a substantial
+    leading prefix of it. Otherwise the delta is appended as a new suffix.
+    """
+    if not delta:
+        return previous
+    if not previous:
+        return delta
+    # New partial extends what is already displayed: it is authoritative.
+    if delta.startswith(previous):
+        return delta
+    common = longest_common_prefix(previous, delta)
+    # A revision keeps a meaningful prefix of the displayed text. Compare
+    # against the delta length so a long, unrelated suffix is still appended.
+    if common >= max(_MIN_REVISION_PREFIX, len(delta) // 2):
+        return delta
+    return previous + delta
+
 
 def _check_ready_sync(url: str, timeout: float) -> tuple[bool, str]:
     try:
@@ -81,10 +122,10 @@ class RealtimeAsr:
                     if not delta:
                         continue
                     # Best-effort overlay rendering. The final transcript is
-                    # authoritative. Observed RNNT deltas are suffixes; if the
-                    # server sends a full replacement, this may briefly show a
-                    # stale prefix until the next event/final.
-                    self.partial += delta
+                    # authoritative. Deltas are usually suffixes, but the
+                    # server may send a full replacement when it revises
+                    # earlier words, so reconcile instead of blind append.
+                    self.partial = reconcile_partial(self.partial, delta)
                     self.on_partial(self.partial)
                 elif kind.endswith("transcription.completed"):
                     self.final_text = event.get("transcript") or ""

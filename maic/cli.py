@@ -7,7 +7,16 @@ import logging
 import os
 import signal
 import sys
+import threading
 from pathlib import Path
+
+from . import __version__
+from .config import load_config
+from .daemon import Daemon, socket_path
+from .overlay_null import NullOverlay
+
+log = logging.getLogger("maic")
+
 
 def _maybe_reexec_with_layer_shell() -> None:
     """gtk4-layer-shell must be linked before libwayland-client.
@@ -15,8 +24,6 @@ def _maybe_reexec_with_layer_shell() -> None:
     The Arch package is linked after GTK's libwayland, so LD_PRELOAD is the
     documented workaround. Re-exec before importing gi/Gtk.
     """
-    if "daemon" not in sys.argv[1:]:
-        return
     lib = os.environ.get(
         "MAIC_LAYER_SHELL_PRELOAD", "/usr/lib/libgtk4-layer-shell.so"
     )
@@ -28,21 +35,6 @@ def _maybe_reexec_with_layer_shell() -> None:
     env = os.environ.copy()
     env["LD_PRELOAD"] = f"{lib} {preload}".strip()
     os.execvpe(sys.executable, [sys.executable, "-m", "maic", *sys.argv[1:]], env)
-
-
-_maybe_reexec_with_layer_shell()
-
-import gi
-
-gi.require_version("Gtk", "4.0")
-from gi.repository import GLib, Gtk  # noqa: E402
-
-from . import __version__  # noqa: E402
-from .config import load_config  # noqa: E402
-from .daemon import Daemon, socket_path  # noqa: E402
-from .overlay import NullOverlay, Overlay  # noqa: E402
-
-log = logging.getLogger("maic")
 
 
 def _request(command: str, **extra) -> dict:
@@ -76,28 +68,54 @@ def _print_response(response: dict) -> int:
     return 1
 
 
-def _run_daemon(args: argparse.Namespace) -> int:
-    cfg = load_config(Path(args.config).expanduser() if args.config else None)
-    if args.no_overlay:
-        cfg.overlay_enabled = False
+def _load_gtk():
+    """Import GTK only for the overlay path.
 
+    Importing ``gi`` loads GTK and, on Arch, triggers the layer-shell
+    ``LD_PRELOAD`` workaround. Headless commands must not pay that cost or
+    require the GUI stack to be installed.
+    """
+    import gi
+
+    gi.require_version("Gtk", "4.0")
+    from gi.repository import GLib, Gtk  # noqa: E402
+
+    return GLib, Gtk
+
+
+def _build_overlay(cfg):
+    if not cfg.overlay_enabled:
+        return NullOverlay()
+
+    # Re-exec before importing gi/Gtk so gtk4-layer-shell is preloaded.
+    _maybe_reexec_with_layer_shell()
+    _GLib, Gtk = _load_gtk()
     Gtk.init()
-    overlay = NullOverlay()
-    if cfg.overlay_enabled:
-        try:
-            overlay = Overlay(cfg)
-        except Exception as exc:
-            print(f"maic: {exc}", file=sys.stderr)
-            return 1
 
-    daemon = Daemon(cfg, overlay)
+    from .overlay import Overlay
+
+    return Overlay(cfg)
+
+
+def _run_headless_loop(daemon: Daemon) -> None:
+    """Block until SIGINT/SIGTERM without requiring GLib/GTK."""
+    stop = threading.Event()
+
+    def request_stop(*_args) -> None:
+        stop.set()
+
+    signal.signal(signal.SIGINT, request_stop)
+    signal.signal(signal.SIGTERM, request_stop)
+    log.info("mAIcrophone %s daemon ready (headless)", __version__)
     try:
-        daemon.start()
-    except Exception as exc:
-        print(f"maic: failed to start daemon: {exc}", file=sys.stderr)
-        overlay.destroy()
-        return 1
+        while not stop.wait(timeout=1.0):
+            pass
+    finally:
+        daemon.stop()
 
+
+def _run_gtk_loop(daemon: Daemon, overlay) -> None:
+    GLib, _Gtk = _load_gtk()
     loop = GLib.MainLoop()
 
     def quit_loop(*_args) -> bool:
@@ -113,6 +131,31 @@ def _run_daemon(args: argparse.Namespace) -> int:
     finally:
         daemon.stop()
         overlay.destroy()
+
+
+def _run_daemon(args: argparse.Namespace) -> int:
+    cfg = load_config(Path(args.config).expanduser() if args.config else None)
+    if args.no_overlay:
+        cfg.overlay_enabled = False
+
+    try:
+        overlay = _build_overlay(cfg)
+    except Exception as exc:
+        print(f"maic: {exc}", file=sys.stderr)
+        return 1
+
+    daemon = Daemon(cfg, overlay)
+    try:
+        daemon.start()
+    except Exception as exc:
+        print(f"maic: failed to start daemon: {exc}", file=sys.stderr)
+        overlay.destroy()
+        return 1
+
+    if cfg.overlay_enabled:
+        _run_gtk_loop(daemon, overlay)
+    else:
+        _run_headless_loop(daemon)
     return 0
 
 

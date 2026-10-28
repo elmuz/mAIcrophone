@@ -131,7 +131,10 @@ Rules:
   4. wait for `input_audio_buffer.committed`,
   5. close socket.
 - On cancel: send `input_audio_buffer.clear`, close socket, never inject.
-- Partials: append non-empty `.delta` values to the overlay text.
+- Partials: reconcile non-empty `.delta` values into the overlay text.
+  `delta` is usually a suffix of the new partial, but it can be a full
+  replacement when the server revises earlier words. Use longest-common-prefix
+  reconciliation, not blind append.
 - Final `transcript` is authoritative and replaces the partial display.
 - Empty deltas are ignored.
 
@@ -200,14 +203,15 @@ handled by the overlay.
 
 Candidate implementations:
 
-- **Python + GTK4 + gtk4-layer-shell**: fastest prototype; Pango text,
-  CSS styling, no custom renderer. Likely the first vertical slice.
+- **Python + GTK4 + gtk4-layer-shell**: current implementation; Pango text,
+  CSS styling, no custom renderer. GTK is imported only on the overlay path.
 - **Rust + smithay-client-toolkit + cosmic-text + tiny-skia**: single binary,
   full control, more code.
 - **Rust + gtk4-layer-shell**: Rust logic with GTK rendering.
 - **Rust + raclettui/ratatui**: TUI-like layer-shell, smaller ecosystem.
 
-Decision pending: prototype stack vs final stack.
+Decision: stay on Python + GTK4 for now. Re-evaluate under the gates in
+`PLAN.md` step 5; introduce backend seams before any port.
 
 ## 8. Text injection
 
@@ -341,12 +345,12 @@ speaking for 30 seconds.
 Mako/`notify-send` is optional and used only for errors; the overlay remains the
 primary feedback surface.
 
-## 12. Decisions needed now
+## 12. Decisions
 
-1. **Implementation stack for the first vertical slice**
-   - Python + GTK4 layer-shell (fastest), or
-   - Rust + smithay/cosmic-text (more work, single binary), or
-   - Rust + gtk4-layer-shell (middle).
+1. **Implementation stack** — resolved for now.
+   - Current: Python + GTK4 layer-shell; GTK is lazy-loaded on the overlay path.
+   - Deferred: Rust + smithay/cosmic-text, Rust + gtk4-layer-shell. See
+     `PLAN.md` step 5 for the gates that would trigger a port.
 2. **Overlay interaction model**
    - focusless layer-shell + global cancel shortcut (recommended), or
    - focused floating TUI overlay (easier UI, steals focus, complicates `wtype`).
@@ -404,6 +408,7 @@ a real contract before or during the first vertical slice.
 
 5. **ASR partial contract**
    - partial display is best-effort, final is authoritative,
+   - deltas are suffixes or full replacements; reconcile with a common prefix,
    - how revisions are displayed without cursor churn,
    - empty deltas ignored.
 
