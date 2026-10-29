@@ -8,6 +8,7 @@ from pathlib import Path
 from maic.backends import build_backends
 from maic.backends.protocols import (
     AsrCapabilities,
+    AsrEvent,
     AudioCapabilities,
     Backends,
     CompositorCapabilities,
@@ -68,8 +69,9 @@ class FakeAudio:
 
 
 class FakeAsrSession:
-    def __init__(self, capabilities):
+    def __init__(self, capabilities, on_event):
         self.capabilities = capabilities
+        self.on_event = on_event
         self.connected = False
         self.audio: list[bytes] = []
         self.cancelled = False
@@ -82,7 +84,10 @@ class FakeAsrSession:
         self.audio.append(data)
 
     async def commit(self, timeout: float = 6.0) -> str | None:
-        return "hello world"
+        final = "hello world"
+        self.on_event(AsrEvent.final(final))
+        self.on_event(AsrEvent.committed())
+        return final
 
     async def cancel(self) -> None:
         self.cancelled = True
@@ -92,21 +97,20 @@ class FakeAsrSession:
 
 
 class FakeAsrProvider:
-    capabilities = AsrCapabilities(
-        supports_streaming=True,
-        supports_partials=True,
-        supports_commit=True,
-        languages=("en-US",),
-    )
-
-    def __init__(self):
+    def __init__(self, capabilities=None):
+        self.capabilities = capabilities or AsrCapabilities(
+            supports_streaming=True,
+            supports_partials=True,
+            supports_commit=True,
+            languages=("en-US",),
+        )
         self.session: FakeAsrSession | None = None
 
     async def check_ready(self, timeout: float = 0.4) -> tuple[bool, str]:
         return True, "ready"
 
-    def create_session(self, *, on_partial, on_final, on_error):
-        self.session = FakeAsrSession(self.capabilities)
+    def create_session(self, *, on_event):
+        self.session = FakeAsrSession(self.capabilities, on_event)
         return self.session
 
 
@@ -213,12 +217,12 @@ overlay = "null"
 
 class DaemonFakeBackendTests(unittest.TestCase):
     def test_session_loop_runs_with_fake_providers(self):
-        async def scenario():
+        async def scenario(asr_capabilities=None):
             cfg = Config()
             compositor = FakeCompositor()
             audio = FakeAudio()
             injection = FakeInjector()
-            asr = FakeAsrProvider()
+            asr = FakeAsrProvider(asr_capabilities)
             overlay = FakeOverlay()
             backends = Backends(
                 compositor=compositor,
@@ -253,6 +257,47 @@ class DaemonFakeBackendTests(unittest.TestCase):
         self.assertEqual(compositor.refocused, [])
         self.assertTrue(overlay.started)
         self.assertTrue(overlay.hidden)
+
+    def test_session_loop_accepts_non_streaming_asr(self):
+        caps = AsrCapabilities(
+            supports_streaming=False,
+            supports_partials=False,
+            supports_commit=True,
+            supports_cancel=True,
+            languages=(),
+        )
+
+        async def scenario():
+            cfg = Config()
+            compositor = FakeCompositor()
+            audio = FakeAudio()
+            injection = FakeInjector()
+            asr = FakeAsrProvider(caps)
+            overlay = FakeOverlay()
+            backends = Backends(
+                compositor=compositor,
+                audio=audio,
+                injection=injection,
+                asr=asr,
+            )
+            daemon = Daemon(cfg, backends, overlay)
+            task = asyncio.create_task(daemon._run_session(False))
+            for _ in range(200):
+                if daemon.state == "recording":
+                    break
+                await asyncio.sleep(0.01)
+            else:
+                task.cancel()
+                raise AssertionError("session never reached recording state")
+            daemon._request_stop()
+            await asyncio.wait_for(task, timeout=2)
+            return injection, overlay
+
+        injection, overlay = asyncio.run(scenario())
+        self.assertEqual(injection.typed, ["hello world"])
+        # Partials are skipped for a batch engine, but the final still reaches
+        # the overlay through the same event contract.
+        self.assertEqual(overlay.partials, ["hello world"])
 
 
 if __name__ == "__main__":

@@ -9,6 +9,7 @@ poll_seconds = 5
 compositor = "niri"
 audio = "pw-record"
 injection = "wtype"
+# nemo-speech | openai-http | faster-whisper | whisper-cpp | batch-http
 asr = "nemo-speech"
 overlay = "gtk"             # gtk | null
 
@@ -22,6 +23,17 @@ chunk_ms = 100
 # Per-session language. Use "auto" for model-based detection.
 language = "en-US"
 punctuation = true
+
+# Batch (non-streaming) engines buffer audio and transcribe when you stop.
+# selected with backend.asr = "openai-http" / "faster-whisper" / "whisper-cpp"
+# / "batch-http". Leave batch_url empty to use server.url when it is HTTP(S);
+# otherwise the provider uses a protocol default (127.0.0.1:8081 for OpenAI-
+# compatible servers, 127.0.0.1:8080/inference for whisper.cpp).
+# batch_url = "http://127.0.0.1:8081/v1/audio/transcriptions"
+# batch_ready_url = "http://127.0.0.1:8081/"
+# batch_protocol = "openai"   # openai | whisper-cpp
+# batch_model = "whisper-1"
+# batch_timeout = 60.0
 
 [overlay]
 enabled = true

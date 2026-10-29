@@ -10,6 +10,7 @@ from .protocols import (
     COMPOSITOR_PROVIDERS,
     INJECTION_PROVIDERS,
     Backends,
+    Clipboard,
 )
 
 if TYPE_CHECKING:
@@ -36,11 +37,11 @@ def _build_audio(name: str, cfg: Config):
     )
 
 
-def _build_injection(name: str, cfg: Config):
+def _build_injection(name: str, cfg: Config, clipboard: Clipboard | None = None):
     if name == "wtype":
         from .wtype import WtypeInjector
 
-        return WtypeInjector(cfg)
+        return WtypeInjector(cfg, clipboard=clipboard)
     raise ValueError(
         f"unknown backend.injection {name!r}; choose from {', '.join(INJECTION_PROVIDERS)}"
     )
@@ -51,20 +52,31 @@ def _build_asr(name: str, cfg: Config):
         from .nemo import NemoSpeechProvider
 
         return NemoSpeechProvider(cfg)
+    if name in {"openai-http", "faster-whisper", "whisper-cpp", "batch-http"}:
+        from .batch import BatchHttpProvider
+
+        protocol = {
+            "openai-http": "openai",
+            "faster-whisper": "openai",
+            "whisper-cpp": "whisper-cpp",
+        }.get(name)
+        return BatchHttpProvider(cfg, protocol)
     raise ValueError(
         f"unknown backend.asr {name!r}; choose from {', '.join(ASR_PROVIDERS)}"
     )
 
 
-def build_backends(cfg: Config) -> Backends:
+def build_backends(cfg: Config, clipboard: Clipboard | None = None) -> Backends:
     """Construct the configured provider set.
 
     Imports are intentionally lazy so headless CLI commands and config-only
     tests do not need ASR/GTK dependencies until a daemon actually starts.
+    ``clipboard`` is the optional GTK clipboard provider; injection providers
+    fall back to their own subprocess implementation when it is absent.
     """
     return Backends(
         compositor=_build_compositor(cfg.backend_compositor),
         audio=_build_audio(cfg.backend_audio, cfg),
-        injection=_build_injection(cfg.backend_injection, cfg),
+        injection=_build_injection(cfg.backend_injection, cfg, clipboard),
         asr=_build_asr(cfg.backend_asr, cfg),
     )

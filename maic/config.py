@@ -20,6 +20,13 @@ class Config:
     server_poll_seconds: int = 5
     language: str = "en-US"
     punctuation: bool = True
+    # Batch (non-streaming) engines. Empty batch_url derives an endpoint from
+    # server.url when that URL is HTTP(S), otherwise from batch_protocol.
+    batch_url: str = ""
+    batch_ready_url: str = ""
+    batch_model: str = "whisper-1"
+    batch_protocol: str = "openai"  # openai | whisper-cpp
+    batch_timeout: float = 60.0
     audio_source: str = ""
     sample_rate: int = 16000
     chunk_ms: int = 100
@@ -100,6 +107,11 @@ def load_config(path: Path | None = None) -> Config:
     )
     cfg.language = str(asr.get("language", cfg.language))
     cfg.punctuation = bool(asr.get("punctuation", cfg.punctuation))
+    cfg.batch_url = str(asr.get("batch_url", cfg.batch_url))
+    cfg.batch_ready_url = str(asr.get("batch_ready_url", cfg.batch_ready_url))
+    cfg.batch_model = str(asr.get("batch_model", cfg.batch_model))
+    cfg.batch_protocol = str(asr.get("batch_protocol", cfg.batch_protocol))
+    cfg.batch_timeout = float(asr.get("batch_timeout", cfg.batch_timeout))
     cfg.audio_source = str(audio.get("source", cfg.audio_source))
     cfg.sample_rate = int(audio.get("sample_rate", cfg.sample_rate))
     cfg.chunk_ms = int(audio.get("chunk_ms", cfg.chunk_ms))
@@ -196,6 +208,13 @@ def load_config(path: Path | None = None) -> Config:
         )
     if cfg.multiline not in {"space", "shift-enter", "clipboard"}:
         raise ValueError(f"invalid injection.multiline: {cfg.multiline!r}")
+    if cfg.batch_protocol not in {"openai", "whisper-cpp"}:
+        raise ValueError(
+            f"invalid asr.batch_protocol: {cfg.batch_protocol!r} "
+            "(choose from openai, whisper-cpp)"
+        )
+    if not 1.0 <= cfg.batch_timeout <= 600.0:
+        raise ValueError("asr.batch_timeout must be between 1 and 600 seconds")
     if not 8_000 <= cfg.sample_rate <= 96_000:
         raise ValueError("audio.sample_rate must be between 8000 and 96000")
     if not 20 <= cfg.chunk_ms <= 1000:

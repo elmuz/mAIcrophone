@@ -80,6 +80,8 @@ The exact keys are decided later based on the current niri config.
 - Only one daemon instance; socket lock prevents duplicates.
 - If the daemon is not running, `maic toggle` fails with a clear message.
 - Logs go to stderr/journald.
+- The protocol is versioned and documented in `docs/ipc.md`. It is currently
+  private to the bundled CLI, not a supported third-party client API.
 
 Why: hotkey commands stay short and stateless; recording/overlay/WS state
 survives across key presses; systemd can restart the daemon.
@@ -231,8 +233,9 @@ Decision: stay on Python + GTK4 for now. Re-evaluate under the gates in
 - Unicode/Italian: `wtype` tested OK.
 - Clipboard:
   - optional `copy_to_clipboard` on every successful session,
-  - `wl-copy` for the regular clipboard,
-  - optional primary-selection mode (`wl-copy --primary`) for middle-click paste,
+  - `Gdk.Clipboard` when the GTK daemon is running, `wl-copy` as the headless
+    and failure fallback,
+  - optional primary-selection mode for middle-click paste,
   - clipboard fallback when injection is impossible.
   - Overwriting the clipboard is acceptable by user preference; the only real
     costs are losing previous clipboard contents and clipboard-history/privacy.
@@ -315,10 +318,15 @@ MAIC_LOG
 
 ## 10. Packaging and services
 
-- `maic.service` — user daemon, `WantedBy=default.target`.
+- `maic.service` — user daemon; sets the layer-shell `LD_PRELOAD` in the
+  service environment.
 - `maic-server.service` — `nemo-speech serve` with RC=6.
+- Core package has no GTK dependency; `.[overlay]` adds the Python GTK extras,
+  while gtk4/gtk4-layer-shell/python-gobject remain distro packages.
+- Manual overlay launches use `scripts/maic-layer-shell` for the preload
+  workaround; headless runs need neither the wrapper nor GTK.
 - Config example + niri keybinding snippet.
-- AUR package later; manual `cargo install`/venv initially.
+- AUR package later; manual venv initially.
 - Optional `maic doctor` for server/socket/mic/wtype checks.
 
 ## 11. Server readiness contract

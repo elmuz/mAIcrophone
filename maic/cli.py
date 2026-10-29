@@ -14,41 +14,23 @@ from . import __version__
 from .backends import build_backends
 from .config import load_config
 from .daemon import Daemon, socket_path
+from .ipc import make_request, validate_response
 from .overlay_null import NullOverlay
 
 log = logging.getLogger("maic")
-
-
-def _maybe_reexec_with_layer_shell() -> None:
-    """gtk4-layer-shell must be linked before libwayland-client.
-
-    The Arch package is linked after GTK's libwayland, so LD_PRELOAD is the
-    documented workaround. Re-exec before importing gi/Gtk.
-    """
-    lib = os.environ.get(
-        "MAIC_LAYER_SHELL_PRELOAD", "/usr/lib/libgtk4-layer-shell.so"
-    )
-    if not os.path.exists(lib):
-        return
-    preload = os.environ.get("LD_PRELOAD", "")
-    if lib in preload.split():
-        return
-    env = os.environ.copy()
-    env["LD_PRELOAD"] = f"{lib} {preload}".strip()
-    os.execvpe(sys.executable, [sys.executable, "-m", "maic", *sys.argv[1:]], env)
 
 
 def _request(command: str, **extra) -> dict:
     async def run() -> dict:
         reader, writer = await asyncio.open_unix_connection(socket_path())
         try:
-            payload = {"command": command, **extra}
+            payload = make_request(command, **extra)
             writer.write((json.dumps(payload) + "\n").encode("utf-8"))
             await writer.drain()
             line = await asyncio.wait_for(reader.readline(), timeout=3)
             if not line:
                 raise RuntimeError("empty response from daemon")
-            return json.loads(line)
+            return validate_response(json.loads(line))
         finally:
             writer.close()
             await writer.wait_closed()
@@ -72,9 +54,9 @@ def _print_response(response: dict) -> int:
 def _load_gtk():
     """Import GTK only for the overlay path.
 
-    Importing ``gi`` loads GTK and, on Arch, triggers the layer-shell
-    ``LD_PRELOAD`` workaround. Headless commands must not pay that cost or
-    require the GUI stack to be installed.
+    Headless commands must not pay that cost or require the GUI stack to be
+    installed. Layer-shell preloading is a launcher/systemd concern; see
+    ``scripts/maic-layer-shell`` and the shipped service unit.
     """
     import gi
 
@@ -86,16 +68,16 @@ def _load_gtk():
 
 def _build_overlay(cfg):
     if not cfg.overlay_enabled or cfg.backend_overlay == "null":
-        return NullOverlay()
+        return NullOverlay(), None
 
-    # Re-exec before importing gi/Gtk so gtk4-layer-shell is preloaded.
-    _maybe_reexec_with_layer_shell()
     _GLib, Gtk = _load_gtk()
     Gtk.init()
 
+    from .backends.clipboard import GtkClipboard
     from .overlay import Overlay
 
-    return Overlay(cfg)
+    # The injector owns the subprocess fallback, so do not nest a second one.
+    return Overlay(cfg), GtkClipboard()
 
 
 def _run_headless_loop(daemon: Daemon) -> None:
@@ -140,13 +122,13 @@ def _run_daemon(args: argparse.Namespace) -> int:
         cfg.overlay_enabled = False
 
     try:
-        overlay = _build_overlay(cfg)
+        overlay, clipboard = _build_overlay(cfg)
     except Exception as exc:
         print(f"maic: {exc}", file=sys.stderr)
         return 1
 
     try:
-        backends = build_backends(cfg)
+        backends = build_backends(cfg, clipboard=clipboard)
     except Exception as exc:
         print(f"maic: {exc}", file=sys.stderr)
         overlay.destroy()

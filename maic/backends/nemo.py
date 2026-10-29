@@ -7,12 +7,10 @@ import json
 import logging
 import time
 import urllib.request
-from typing import Callable
-
 import websockets
 
 from ..config import Config
-from .protocols import AsrCapabilities
+from .protocols import AsrCapabilities, AsrEvent, AsrEventListener
 
 log = logging.getLogger("maic.asr")
 
@@ -74,17 +72,9 @@ async def check_ready(cfg: Config, timeout: float = 0.4) -> tuple[bool, str]:
 
 
 class NemoRealtimeSession:
-    def __init__(
-        self,
-        cfg: Config,
-        on_partial: Callable[[str], None],
-        on_final: Callable[[str], None],
-        on_error: Callable[[str], None],
-    ):
+    def __init__(self, cfg: Config, on_event: AsrEventListener):
         self.cfg = cfg
-        self.on_partial = on_partial
-        self.on_final = on_final
-        self.on_error = on_error
+        self.on_event = on_event
         self.capabilities = NemoSpeechProvider.capabilities
         self.ws = None
         self.reader: asyncio.Task | None = None
@@ -131,23 +121,24 @@ class NemoRealtimeSession:
                     # server may send a full replacement when it revises
                     # earlier words, so reconcile instead of blind append.
                     self.partial = reconcile_partial(self.partial, delta)
-                    self.on_partial(self.partial)
+                    self.on_event(AsrEvent.partial(self.partial))
                 elif kind.endswith("transcription.completed"):
                     self.final_text = event.get("transcript") or ""
                     self.partial = self.final_text
-                    self.on_final(self.final_text)
+                    self.on_event(AsrEvent.final(self.final_text))
                     self.final_event.set()
                 elif kind == "input_audio_buffer.committed":
+                    self.on_event(AsrEvent.committed())
                     self.committed_event.set()
                 elif kind == "error":
                     msg = event.get("error", {}).get("message", "ASR error")
-                    self.on_error(msg)
+                    self.on_event(AsrEvent.error(msg))
                     self.final_event.set()
                     self.committed_event.set()
         except asyncio.CancelledError:
             raise
         except Exception as exc:
-            self.on_error(str(exc))
+            self.on_event(AsrEvent.error(str(exc)))
             self.final_event.set()
             self.committed_event.set()
 
@@ -167,7 +158,7 @@ class NemoRealtimeSession:
             await asyncio.wait_for(self.committed_event.wait(), timeout=timeout)
             log.info("committed received after %.2fs", time.monotonic() - started)
         except asyncio.TimeoutError:
-            self.on_error("timed out waiting for final transcript")
+            self.on_event(AsrEvent.error("timed out waiting for final transcript"))
             return None
         return self.final_text
 
@@ -209,11 +200,5 @@ class NemoSpeechProvider:
     async def check_ready(self, timeout: float = 0.4) -> tuple[bool, str]:
         return await check_ready(self.cfg, timeout)
 
-    def create_session(
-        self,
-        *,
-        on_partial: Callable[[str], None],
-        on_final: Callable[[str], None],
-        on_error: Callable[[str], None],
-    ) -> NemoRealtimeSession:
-        return NemoRealtimeSession(self.cfg, on_partial, on_final, on_error)
+    def create_session(self, *, on_event: AsrEventListener) -> NemoRealtimeSession:
+        return NemoRealtimeSession(self.cfg, on_event)

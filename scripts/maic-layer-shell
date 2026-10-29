@@ -1,0 +1,22 @@
+#!/bin/sh
+# Launch maic with gtk4-layer-shell linked before libwayland-client.
+#
+# The Arch gtk4-layer-shell package is linked after GTK's libwayland, so GTK
+# otherwise falls back to a normal centred window. Preloading is deliberately
+# kept out of the Python application: use this launcher for manual runs, or the
+# shipped systemd unit, which sets the same variable in its service
+# environment.
+
+set -eu
+
+lib="${MAIC_LAYER_SHELL_PRELOAD:-/usr/lib/libgtk4-layer-shell.so}"
+
+if [ -e "$lib" ]; then
+    case " ${LD_PRELOAD:-} " in
+        *" $lib "*) ;;
+        *) LD_PRELOAD="$lib${LD_PRELOAD:+ $LD_PRELOAD}" ;;
+    esac
+    export LD_PRELOAD
+fi
+
+exec maic "$@"

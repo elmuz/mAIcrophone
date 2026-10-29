@@ -1,4 +1,4 @@
-"""Text injection provider backed by ``wtype`` and ``wl-copy``."""
+"""Text injection provider backed by ``wtype`` and a clipboard provider."""
 
 from __future__ import annotations
 
@@ -7,7 +7,8 @@ import logging
 
 from ..config import Config
 from ..subprocess_env import child_env
-from .protocols import InjectionCapabilities
+from .clipboard import SubprocessClipboard
+from .protocols import Clipboard, InjectionCapabilities
 
 log = logging.getLogger("maic")
 
@@ -29,41 +30,33 @@ async def _run(*args: str, stdin: bytes | None = None) -> tuple[int, bytes, byte
     return proc.returncode or 0, out, err
 
 
-async def _run_detached(*args: str, stdin: bytes | None = None) -> int:
-    """Run a command that intentionally forks a background process.
+async def copy_to_clipboard(
+    text: str,
+    cfg: Config,
+    clipboard: Clipboard | None = None,
+    fallback: Clipboard | None = None,
+) -> bool:
+    """Copy to the selections requested by the config.
 
-    `wl-copy` forks a clipboard-owner process that inherits stdout/stderr.
-    If we capture those pipes, `communicate()` waits for EOF and therefore
-    blocks until the clipboard is replaced. Redirect them to /dev/null.
+    ``clipboard`` is the preferred provider; ``fallback`` is tried once per
+    selection if it returns false. The default is the ``wl-copy`` subprocess
+    provider, so headless installs keep working without GTK.
     """
-    proc = await asyncio.create_subprocess_exec(
-        *args,
-        stdin=asyncio.subprocess.PIPE if stdin is not None else asyncio.subprocess.DEVNULL,
-        stdout=asyncio.subprocess.DEVNULL,
-        stderr=asyncio.subprocess.DEVNULL,
-        env=child_env(),
-    )
-    try:
-        await asyncio.wait_for(proc.communicate(stdin), timeout=5)
-    except asyncio.TimeoutError:
-        proc.kill()
-        await proc.wait()
-        return 124
-    return proc.returncode or 0
-
-
-async def copy_to_clipboard(text: str, cfg: Config) -> bool:
-    data = text.encode("utf-8")
+    preferred = clipboard or SubprocessClipboard()
     ok = True
+    selections = []
     if cfg.copy_to_clipboard:
-        rc = await _run_detached("wl-copy", stdin=data)
-        if rc != 0:
-            log.warning("wl-copy failed (%s)", rc)
-            ok = False
+        selections.append(("clipboard", False))
     if cfg.primary_selection:
-        rc = await _run_detached("wl-copy", "--primary", stdin=data)
-        if rc != 0:
-            log.warning("wl-copy --primary failed (%s)", rc)
+        selections.append(("primary selection", True))
+
+    for label, primary in selections:
+        copied = await preferred.copy(text, primary=primary)
+        if not copied and fallback is not None:
+            log.warning("%s copy failed; falling back to wl-copy", label)
+            copied = await fallback.copy(text, primary=primary)
+        if not copied:
+            log.warning("%s copy failed", label)
             ok = False
     return ok
 
@@ -108,11 +101,22 @@ class WtypeInjector:
         supports_primary_selection=True,
     )
 
-    def __init__(self, cfg: Config):
+    def __init__(self, cfg: Config, clipboard: Clipboard | None = None):
         self.cfg = cfg
+        self.clipboard = clipboard or SubprocessClipboard()
+        # Only a preferred provider needs a fallback. The subprocess provider
+        # is already the fallback for headless daemons.
+        self.clipboard_fallback = (
+            SubprocessClipboard() if clipboard is not None else None
+        )
 
     async def type_text(self, text: str) -> bool:
         return await type_text(text, self.cfg)
 
     async def copy_to_clipboard(self, text: str) -> bool:
-        return await copy_to_clipboard(text, self.cfg)
+        return await copy_to_clipboard(
+            text,
+            self.cfg,
+            clipboard=self.clipboard,
+            fallback=self.clipboard_fallback,
+        )

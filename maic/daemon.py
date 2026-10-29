@@ -9,7 +9,9 @@ import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from . import __version__
 from .backends.protocols import (
+    AsrEvent,
     AsrSession,
     AudioCapture,
     Backends,
@@ -17,6 +19,13 @@ from .backends.protocols import (
     TargetWindow,
 )
 from .config import Config
+from .ipc import (
+    MAX_MESSAGE_BYTES,
+    IpcProtocolError,
+    error,
+    ok,
+    validate_request,
+)
 from .subprocess_env import child_env
 from .text import normalize_text
 
@@ -37,6 +46,7 @@ class Session:
     stop_event: asyncio.Event = field(default_factory=asyncio.Event)
     cancel_event: asyncio.Event = field(default_factory=asyncio.Event)
     error_event: asyncio.Event = field(default_factory=asyncio.Event)
+    committed_event: asyncio.Event = field(default_factory=asyncio.Event)
     error_message: str = ""
 
 
@@ -140,10 +150,21 @@ class Daemon:
             line = await reader.readline()
             if not line:
                 return
-            request = json.loads(line)
+            if len(line) > MAX_MESSAGE_BYTES:
+                raise IpcProtocolError("bad_request", "request is too large")
+            try:
+                payload = json.loads(line)
+            except json.JSONDecodeError as exc:
+                raise IpcProtocolError(
+                    "bad_request", f"invalid JSON: {exc.msg}"
+                ) from exc
+            request = validate_request(payload)
             response = await self.dispatch(request)
+        except IpcProtocolError as exc:
+            response = error(exc.message, exc.code)
         except Exception as exc:
-            response = {"ok": False, "error": str(exc)}
+            log.exception("IPC request failed")
+            response = error(str(exc), "internal_error")
         try:
             writer.write((json.dumps(response) + "\n").encode("utf-8"))
             await writer.drain()
@@ -151,40 +172,80 @@ class Daemon:
             writer.close()
             await writer.wait_closed()
 
+    def _status_snapshot(self) -> dict:
+        if self.server_ready is True:
+            server_status = "online"
+        elif self.server_ready is False:
+            server_status = "offline"
+        else:
+            server_status = "checking"
+
+        session = None
+        if self.session is not None:
+            target = self.session.target
+            session = {
+                "target": {
+                    "id": target.id,
+                    "pid": target.pid,
+                    "app_id": target.app_id,
+                    "title": target.title,
+                }
+            }
+
+        return {
+            "state": self.state,
+            "language": self.cfg.language,
+            "server_ready": self.server_ready,
+            "server_status": server_status,
+            "overlay": bool(
+                self.cfg.overlay_enabled and self.cfg.backend_overlay != "null"
+            ),
+            "version": __version__,
+            "session": session,
+        }
+
     async def dispatch(self, request: dict) -> dict:
         command = str(request.get("command", ""))
         if command == "status":
-            return {"ok": True, "state": self.state, "language": self.cfg.language}
+            return ok(**self._status_snapshot())
         if command == "language":
-            code = str(request.get("language", "")).strip()
+            value = request.get("language", "")
+            if not isinstance(value, str):
+                return error("language must be a string", "invalid_argument")
+            code = value.strip()
             if not code:
-                return {"ok": True, "language": self.cfg.language}
+                return ok(language=self.cfg.language)
             self.cfg.language = code
             self.overlay.set_language(code)
             log.info("language set to %s", code)
-            return {"ok": True, "language": code}
+            return ok(language=code)
         if command == "toggle":
+            clipboard = request.get("clipboard", False)
+            if not isinstance(clipboard, bool):
+                return error("clipboard must be a boolean", "invalid_argument")
             if self.state == "idle":
-                self._start_session(copy=bool(request.get("clipboard", False)))
-                return {"ok": True, "state": self.state}
+                self._start_session(copy=clipboard)
+                return ok(state=self.state)
             if self.state in {"recording", "starting"}:
                 self._request_stop()
-                return {"ok": True, "state": self.state}
-            return {"ok": True, "state": self.state}
+                return ok(state=self.state)
+            return ok(state=self.state)
         if command == "stop":
             self._request_stop()
-            return {"ok": True, "state": self.state}
+            return ok(state=self.state)
         if command == "cancel":
             self._request_cancel()
-            return {"ok": True, "state": self.state}
+            return ok(state=self.state)
         if command == "type":
-            text = normalize_text(str(request.get("text", "")), self.cfg)
-            ok = await self.backends.injection.type_text(text)
-            return {"ok": ok, "state": self.state}
-        if command == "quit":
-            self._request_cancel()
-            return {"ok": True, "state": self.state}
-        return {"ok": False, "error": f"unknown command: {command}"}
+            value = request.get("text")
+            if not isinstance(value, str):
+                return error("text must be a string", "invalid_argument")
+            text = normalize_text(value, self.cfg)
+            injected = await self.backends.injection.type_text(text)
+            if not injected:
+                return error("text injection failed", "injection_failed")
+            return ok(state=self.state)
+        return error(f"unknown command: {command}", "unknown_command")
 
     def _start_session(self, copy: bool) -> None:
         if self.state != "idle":
@@ -266,9 +327,7 @@ class Daemon:
             self.overlay.set_state("CONNECT")
 
             asr = self.backends.asr.create_session(
-                on_partial=self.overlay.set_partial,
-                on_final=self.overlay.set_partial,
-                on_error=lambda msg: self._on_asr_error(session, msg),
+                on_event=lambda event: self._on_asr_event(session, event),
             )
             await asr.connect()
 
@@ -406,9 +465,18 @@ class Daemon:
             await asyncio.sleep(0.05)
         return False
 
-    def _on_asr_error(self, session: Session, message: str) -> None:
-        session.error_message = message
-        session.error_event.set()
+    def _on_asr_event(self, session: Session, event: AsrEvent) -> None:
+        if event.kind == "partial":
+            # Partial support is optional; batch engines go straight to final.
+            if self.backends.asr.capabilities.supports_partials:
+                self.overlay.set_partial(event.text)
+        elif event.kind == "final":
+            self.overlay.set_partial(event.text)
+        elif event.kind == "committed":
+            session.committed_event.set()
+        elif event.kind == "error":
+            session.error_message = event.text
+            session.error_event.set()
 
     async def _audio_loop(self, audio: AudioCapture, asr: AsrSession, session: Session) -> None:
         try:

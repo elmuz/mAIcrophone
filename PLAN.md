@@ -56,34 +56,40 @@ tests and the current provider passes through it.
 
 ## Step 3 — ASR abstraction
 
-Status: **next**.
+Status: **done**.
 
-- [ ] Formalize `AsrSession` events: `partial`, `final`, `committed`, `error`.
-- [ ] Move readiness/health probing into the engine provider.
-- [ ] Keep nemo-speech's WebSocket, `/ready`, commit, and delta/revision behavior
+- [x] Formalize `AsrSession` events: `partial`, `final`, `committed`, `error`.
+      Sessions emit normalized `AsrEvent` values through a single listener.
+- [x] Move readiness/health probing into the engine provider: nemo-speech owns
+      `/ready`, the batch HTTP provider owns its HTTP reachability probe.
+- [x] Keep nemo-speech's WebSocket, `/ready`, commit, and delta/revision behavior
       inside its implementation.
-- [ ] Add a batch adapter that buffers PCM and transcribes on stop, enabling
-      whisper.cpp/faster-whisper-style servers.
-- [ ] Make the session flow adapt to capabilities (streaming vs batch,
+- [x] Add a batch adapter that buffers PCM and transcribes on stop, enabling
+      whisper.cpp/faster-whisper-style servers (`openai-http`,
+      `faster-whisper`, `whisper-cpp`, and generic `batch-http`).
+- [x] Make the session flow adapt to capabilities (streaming vs batch,
       partials optional, endpointing optional).
 
-Acceptance: at least one non-streaming engine can be selected without changing
-`daemon.py` or the overlay contract.
+Acceptance: `[backend] asr = "openai-http"` (or `whisper-cpp`/`batch-http`)
+runs through the same `daemon.py` and overlay contract as nemo-speech.
+
+Known limit: batch mode only produces a transcript after the recording stops;
+the overlay shows no live partials with that provider.
 
 ## Step 4 — IPC, clipboard, packaging
 
-Status: backlog.
+Status: **done**.
 
-- [ ] Version and document the Unix-socket JSON commands, responses, errors, and
-      status snapshot.
-- [ ] Decide whether the socket protocol is private CLI-only or a supported
-      client API.
-- [ ] Replace `wl-copy` with `Gdk.Clipboard` where the GTK daemon is available;
-      keep the subprocess as a fallback.
-- [ ] Treat GTK/GI as an optional overlay backend for packaging; core daemon and
-      CLI should install and run without it.
-- [ ] Move the layer-shell `LD_PRELOAD` re-exec out of application logic into a
-      launcher/systemd concern.
+- [x] Version and document the Unix-socket JSON commands, responses, errors, and
+      status snapshot (`maic/ipc.py`, `docs/ipc.md`).
+- [x] Decide whether the socket protocol is private CLI-only or a supported
+      client API. Decision: versioned but private to the bundled CLI for now.
+- [x] Replace `wl-copy` with `Gdk.Clipboard` where the GTK daemon is available;
+      keep the subprocess as a fallback (`maic/backends/clipboard.py`).
+- [x] Treat GTK/GI as an optional overlay backend for packaging; core daemon and
+      CLI install and run without it (`.[overlay]` extra).
+- [x] Move the layer-shell `LD_PRELOAD` re-exec out of application logic into a
+      launcher/systemd concern (`scripts/maic-layer-shell`, unit environment).
 
 Acceptance: a headless install can run the daemon and CLI; the overlay package
 adds GTK as an explicit optional dependency.

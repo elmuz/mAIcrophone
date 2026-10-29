@@ -5,9 +5,9 @@ features and known gaps.
 
 ## Next up
 
-- Replace external binary calls (`niri`, `wtype`, `pw-record`, clipboard tools)
-  with native libraries/APIs where practical, behind the backend interfaces
-  from `PLAN.md` step 2.
+- Replace external binary calls (`niri`, `wtype`, `pw-record`, and the
+  `wl-copy` clipboard fallback) with native libraries/APIs where practical,
+  behind the backend interfaces from `PLAN.md` step 2.
 - Manual punctuation insertion via a shortcut. The model punctuation is often
   weak in practice, especially for questions. Consider a post-injection or
   pre-injection command that appends/edits `.`, `,`, `?`, or `!` without

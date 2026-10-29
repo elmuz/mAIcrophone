@@ -9,7 +9,14 @@ description = "Local push-to-talk dictation for Niri/Wayland"
 requires-python = ">=3.11"
 dependencies = [
     "websockets>=12",
+]
+
+[project.optional-dependencies]
+# GTK/GI itself is provided by the distro (gtk4, python-gobject) and is an
+# optional overlay dependency. pycairo is required by the overlay module.
+overlay = [
     "pycairo>=1.20",
+    "PyGObject>=3.42",
 ]
 
 [project.scripts]

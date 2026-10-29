@@ -9,29 +9,45 @@ focused when recording started.
 
 ## Requirements
 
+Core daemon and CLI (headless install):
+
 - Arch Linux / Wayland / Niri
 - Python 3.11+
-- `gtk4`, `gtk4-layer-shell`, `python-gobject`
 - `pipewire` (`pw-record`)
-- `wtype`, `wl-copy`
+- `wtype`
 - `nemo-speech` with `nemotron-3.5`
+- optional: `wl-copy` as the clipboard fallback when GTK is not used
 - optional: cased ITN grammars for inverse text normalization
 
-Install the GTK layer-shell package:
+Overlay (optional):
+
+- `gtk4`, `gtk4-layer-shell`, `python-gobject`, `python-cairo`
+
+Install the core package without GTK:
 
 ```bash
-sudo pacman -S gtk4-layer-shell
+pip install -e .
+```
+
+Install the overlay dependency extra, then the system GTK packages:
+
+```bash
+pip install -e '.[overlay]'
+sudo pacman -S gtk4 gtk4-layer-shell python-gobject python-cairo
 ```
 
 On Arch, `gtk4-layer-shell` may be linked after `libwayland-client`, which makes
-GTK fall back to a normal centred window. `maic daemon` automatically re-execs
-itself with the documented workaround:
+GTK fall back to a normal centred window. Layer-shell preloading is a
+launcher/systemd concern, not application logic. Use the shipped launcher for
+manual overlay runs:
 
 ```bash
-LD_PRELOAD=/usr/lib/libgtk4-layer-shell.so
+scripts/maic-layer-shell daemon
 ```
 
-The systemd unit sets the same environment variable.
+The systemd unit sets `LD_PRELOAD=/usr/lib/libgtk4-layer-shell.so` in its
+service environment. Headless runs (`maic daemon --no-overlay`) need neither the
+launcher nor the GTK stack.
 
 ## Development setup
 
@@ -105,6 +121,9 @@ For testing without the overlay:
 maic daemon --no-overlay
 ```
 
+The CLI/daemon Unix-socket protocol is documented in [docs/ipc.md](docs/ipc.md).
+It is versioned but currently private to the bundled CLI.
+
 ## Niri bindings
 
 Add to `~/.config/niri/config.kdl`, choosing keys that do not conflict:
@@ -128,6 +147,12 @@ selects the compositor, audio, injection, ASR, and overlay providers; current
 names are `niri`, `pw-record`, `wtype`, `nemo-speech`, and `gtk`/`null`. Unknown
 names are rejected when the config is loaded.
 
+For a non-streaming server (whisper.cpp or any OpenAI-compatible
+faster-whisper server), set `backend.asr` to `whisper-cpp`, `openai-http`,
+`faster-whisper`, or the generic `batch-http`, then point `[asr] batch_url` at
+the transcription endpoint. Batch providers buffer audio while you speak and
+transcribe once on stop, so they do not show live partials.
+
 The default language is `en-US`. Language is a per-session setting: changing it
 with `maic language` affects the next dictation without restarting the ASR
 server. The overlay shows `EN`, `IT`, or `AUTO` in its status row.
@@ -141,7 +166,8 @@ newest text remains visible. Geometry and typography are configurable under
 
 By default, the final transcript is copied to both the regular clipboard and
 the PRIMARY selection (middle-click paste). Set `primary_selection = false` if
-you do not want that.
+you do not want that. When the GTK daemon is running, clipboard writes use
+`Gdk.Clipboard`; headless daemons and failed GTK writes fall back to `wl-copy`.
 
 ## Systemd
 

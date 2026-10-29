@@ -8,7 +8,7 @@ selected through configuration.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Callable, Protocol, runtime_checkable
+from typing import Callable, Literal, Protocol, runtime_checkable
 
 
 # Provider names accepted by the configuration. Keep these tuples in sync with
@@ -16,7 +16,13 @@ from typing import Callable, Protocol, runtime_checkable
 COMPOSITOR_PROVIDERS = ("niri",)
 AUDIO_PROVIDERS = ("pw-record",)
 INJECTION_PROVIDERS = ("wtype",)
-ASR_PROVIDERS = ("nemo-speech",)
+ASR_PROVIDERS = (
+    "nemo-speech",
+    "openai-http",
+    "faster-whisper",
+    "whisper-cpp",
+    "batch-http",
+)
 OVERLAY_PROVIDERS = ("gtk", "null")
 
 
@@ -73,8 +79,46 @@ class AsrCapabilities:
     supports_cancel: bool = True
     supports_punctuation: bool = True
     supports_itn: bool = True
+    # Endpointing means the server may produce a final without an explicit
+    # commit from the client. The core session loop does not require it.
+    supports_endpointing: bool = False
     # Empty means the provider accepts arbitrary language tags.
     languages: tuple[str, ...] = ()
+
+
+AsrEventKind = Literal["partial", "final", "committed", "error"]
+
+
+@dataclass(frozen=True)
+class AsrEvent:
+    """A normalized event emitted by an ASR session.
+
+    ``partial`` carries a best-effort in-progress transcript, ``final`` the
+    authoritative transcript, ``committed`` signals that the server accepted
+    the end of the audio buffer, and ``error`` carries a user-facing message.
+    """
+
+    kind: AsrEventKind
+    text: str = ""
+
+    @classmethod
+    def partial(cls, text: str) -> "AsrEvent":
+        return cls("partial", text)
+
+    @classmethod
+    def final(cls, text: str) -> "AsrEvent":
+        return cls("final", text)
+
+    @classmethod
+    def committed(cls) -> "AsrEvent":
+        return cls("committed")
+
+    @classmethod
+    def error(cls, message: str) -> "AsrEvent":
+        return cls("error", message)
+
+
+AsrEventListener = Callable[[AsrEvent], None]
 
 
 @runtime_checkable
@@ -103,6 +147,17 @@ class AudioCapture(Protocol):
     async def stop(self) -> None: ...
 
     def level(self, data: bytes) -> float: ...
+
+
+@runtime_checkable
+class Clipboard(Protocol):
+    """A clipboard destination used by an injector.
+
+    ``primary`` selects the Wayland PRIMARY selection (middle-click paste)
+    instead of the regular clipboard.
+    """
+
+    async def copy(self, text: str, *, primary: bool = False) -> bool: ...
 
 
 @runtime_checkable
@@ -138,9 +193,7 @@ class AsrProvider(Protocol):
     def create_session(
         self,
         *,
-        on_partial: Callable[[str], None],
-        on_final: Callable[[str], None],
-        on_error: Callable[[str], None],
+        on_event: AsrEventListener,
     ) -> AsrSession: ...
 
 
