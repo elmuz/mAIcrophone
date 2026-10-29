@@ -1,13 +1,13 @@
-# TODO
+# Backlog
 
-Architecture work is sequenced in `PLAN.md`. This file tracks user-facing
+Architecture work is sequenced in `roadmap.md`. This file tracks user-facing
 features and known gaps.
 
 ## Next up
 
 - Replace remaining external binary calls (`wtype`; optional fallbacks such as
   `pw-record` and `wl-copy`) with native libraries/APIs where practical, behind
-  the backend interfaces from `PLAN.md` step 2. Niri IPC, audio capture
+  the backend interfaces from `roadmap.md` step 2. Niri IPC, audio capture
   (`pulse`), and the default clipboard path are now native.
 - Keep the native Niri/clipboard/audio implementations covered by protocol and
   lifecycle unit tests; add real-session smoke tests when a disposable Niri or
@@ -33,4 +33,4 @@ features and known gaps.
 - Spoken punctuation ("comma", "full stop", etc.).
 - Non-Niri compositor support. Backend seams are being prepared, but no second
   compositor is planned yet.
-- Rust rewrite. Re-evaluate only under the gates in `PLAN.md` step 5.
+- Rust rewrite. Re-evaluate only under the gates in `roadmap.md` step 5.

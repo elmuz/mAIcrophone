@@ -2,7 +2,7 @@
 
 Goal: make the core independent of Niri, `wtype`, `pw-record`, `nemo-speech`,
 and GTK **before** expanding the feature set or deciding on a rewrite. The
-product backlog stays in `TODO.md`; this file tracks the architectural
+product backlog stays in `backlog.md`; this file tracks the architectural
 sequence.
 
 Principle: introduce seams while there is only one implementation. Adding a

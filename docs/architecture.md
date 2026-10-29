@@ -215,7 +215,7 @@ Candidate implementations:
 - **Rust + raclettui/ratatui**: TUI-like layer-shell, smaller ecosystem.
 
 Decision: stay on Python + GTK4 for now. Re-evaluate under the gates in
-`PLAN.md` step 5; introduce backend seams before any port.
+`roadmap.md` step 5; introduce backend seams before any port.
 
 ## 8. Text injection
 
@@ -362,7 +362,7 @@ primary feedback surface.
 1. **Implementation stack** — resolved for now.
    - Current: Python + GTK4 layer-shell; GTK is lazy-loaded on the overlay path.
    - Deferred: Rust + smithay/cosmic-text, Rust + gtk4-layer-shell. See
-     `PLAN.md` step 5 for the gates that would trigger a port.
+     `roadmap.md` step 5 for the gates that would trigger a port.
 2. **Overlay interaction model**
    - focusless layer-shell + global cancel shortcut (recommended), or
    - focused floating TUI overlay (easier UI, steals focus, complicates `wtype`).
