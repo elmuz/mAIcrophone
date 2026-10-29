@@ -14,7 +14,7 @@ from typing import Callable, Literal, Protocol, runtime_checkable
 # Provider names accepted by the configuration. Keep these tuples in sync with
 # the factories in :mod:`maic.backends`.
 COMPOSITOR_PROVIDERS = ("niri",)
-AUDIO_PROVIDERS = ("pw-record",)
+AUDIO_PROVIDERS = ("pulse", "pw-record")
 INJECTION_PROVIDERS = ("wtype",)
 ASR_PROVIDERS = (
     "nemo-speech",

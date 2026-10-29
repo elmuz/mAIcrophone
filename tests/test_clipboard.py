@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import asyncio
+import sys
 import unittest
+from unittest import mock
 
 from maic.backends.wtype import WtypeInjector, copy_to_clipboard
 from maic.config import Config
@@ -59,8 +61,16 @@ class InjectorClipboardTests(unittest.TestCase):
         self.assertTrue(asyncio.run(injector.copy_to_clipboard("hello")))
         self.assertEqual(preferred.calls, [("hello", False)])
 
-    def test_injector_defaults_to_the_subprocess_provider(self):
+    def test_injector_defaults_to_the_native_wayland_provider(self):
         injector = WtypeInjector(Config())
+        self.assertEqual(type(injector.clipboard).__name__, "WaylandClipboard")
+        self.assertEqual(type(injector.clipboard_fallback).__name__, "SubprocessClipboard")
+
+    def test_injector_uses_wl_copy_when_libwayland_is_unavailable(self):
+        with mock.patch.dict(
+            sys.modules, {"maic.backends.wayland_clipboard": None}
+        ):
+            injector = WtypeInjector(Config())
         self.assertEqual(type(injector.clipboard).__name__, "SubprocessClipboard")
         self.assertIsNone(injector.clipboard_fallback)
 

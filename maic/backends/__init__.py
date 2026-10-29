@@ -28,6 +28,10 @@ def _build_compositor(name: str):
 
 
 def _build_audio(name: str, cfg: Config):
+    if name == "pulse":
+        from .pulse import PulseAudioCapture
+
+        return PulseAudioCapture(cfg)
     if name == "pw-record":
         from .pipewire import PwRecordAudioCapture
 

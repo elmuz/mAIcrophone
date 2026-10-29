@@ -173,7 +173,7 @@ class BackendFactoryTests(unittest.TestCase):
     def test_default_backends_are_built_from_config(self):
         backends = build_backends(Config())
         self.assertEqual(type(backends.compositor).__name__, "NiriCompositor")
-        self.assertEqual(type(backends.audio).__name__, "PwRecordAudioCapture")
+        self.assertEqual(type(backends.audio).__name__, "PulseAudioCapture")
         self.assertEqual(type(backends.injection).__name__, "WtypeInjector")
         self.assertEqual(type(backends.asr).__name__, "NemoSpeechProvider")
         self.assertTrue(backends.compositor.capabilities.can_refocus)
@@ -189,7 +189,7 @@ class BackendConfigTests(unittest.TestCase):
                 """
 [backend]
 compositor = "niri"
-audio = "pw-record"
+audio = "pulse"
 injection = "wtype"
 asr = "nemo-speech"
 overlay = "null"
@@ -199,7 +199,7 @@ overlay = "null"
             cfg = load_config(path)
 
         self.assertEqual(cfg.backend_compositor, "niri")
-        self.assertEqual(cfg.backend_audio, "pw-record")
+        self.assertEqual(cfg.backend_audio, "pulse")
         self.assertEqual(cfg.backend_injection, "wtype")
         self.assertEqual(cfg.backend_asr, "nemo-speech")
         self.assertEqual(cfg.backend_overlay, "null")

@@ -39,8 +39,9 @@ async def copy_to_clipboard(
     """Copy to the selections requested by the config.
 
     ``clipboard`` is the preferred provider; ``fallback`` is tried once per
-    selection if it returns false. The default is the ``wl-copy`` subprocess
-    provider, so headless installs keep working without GTK.
+    selection if it returns false. Callers normally pass the native Wayland
+    provider and keep the ``wl-copy`` subprocess only as a compatibility
+    fallback.
     """
     preferred = clipboard or SubprocessClipboard()
     ok = True
@@ -103,12 +104,23 @@ class WtypeInjector:
 
     def __init__(self, cfg: Config, clipboard: Clipboard | None = None):
         self.cfg = cfg
-        self.clipboard = clipboard or SubprocessClipboard()
-        # Only a preferred provider needs a fallback. The subprocess provider
-        # is already the fallback for headless daemons.
-        self.clipboard_fallback = (
-            SubprocessClipboard() if clipboard is not None else None
-        )
+        # Keep libwayland optional at import time: headless installs that use
+        # the GTK provider should not fail just because the native client
+        # cannot be loaded. ``wl-copy`` remains the final compatibility path.
+        self.clipboard = clipboard
+        if self.clipboard is None:
+            try:
+                from .wayland_clipboard import WaylandClipboard
+
+                self.clipboard = WaylandClipboard()
+            except Exception as exc:
+                log.warning(
+                    "native Wayland clipboard unavailable (%s); using wl-copy", exc
+                )
+                self.clipboard = SubprocessClipboard()
+                self.clipboard_fallback = None
+                return
+        self.clipboard_fallback = SubprocessClipboard()
 
     async def type_text(self, text: str) -> bool:
         return await type_text(text, self.cfg)

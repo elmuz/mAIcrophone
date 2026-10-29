@@ -12,12 +12,28 @@ focused when recording started.
 Core daemon and CLI (headless install):
 
 - Arch Linux / Wayland / Niri
-- Python 3.11+
-- `pipewire` (`pw-record`)
-- `wtype`
-- `nemo-speech` with `nemotron-3.5`
-- optional: `wl-copy` as the clipboard fallback when GTK is not used
+- Python 3.11+ and the Python package `websockets` (installed by `pip`)
+- system libraries: `libwayland-client` and `libpulse`/`libpulse-simple`
+- PipeWire with `pipewire-pulse` (native capture through `libpulse-simple`)
+  or the optional `pw-record` fallback
+- `wtype` (still required for text injection)
+- `nemo-speech` with `nemotron-3.5` (the ASR server is a separate process)
+- optional: `wl-copy` as a clipboard fallback; the default clipboard path is
+  native Wayland `ext-data-control-v1`
+- optional: `notify-send` for desktop error notifications
 - optional: cased ITN grammars for inverse text normalization
+
+The Niri backend talks to `$NIRI_SOCKET` directly, so the `niri` executable is
+not required at runtime. When the daemon is started by systemd without
+`NIRI_SOCKET` in its environment, it falls back to the newest `niri*.sock` in
+`$XDG_RUNTIME_DIR`.
+
+The normal headless dependency set is therefore Python + the `websockets`
+package + `wtype` + `libwayland-client` + a PulseAudio-compatible server
+(usually `pipewire-pulse`) + the external ASR server. The GTK overlay stack and
+`wl-copy`/`pw-record` are optional. If `libwayland-client` or
+`ext-data-control-v1` is unavailable, clipboard writes fall back to `wl-copy`
+when it is installed.
 
 Overlay (optional):
 
@@ -144,8 +160,12 @@ you finish speaking.
 
 Concrete implementations live under `maic/backends/`. The `[backend]` section
 selects the compositor, audio, injection, ASR, and overlay providers; current
-names are `niri`, `pw-record`, `wtype`, `nemo-speech`, and `gtk`/`null`. Unknown
-names are rejected when the config is loaded.
+names are `niri`, `pulse`/`pw-record`, `wtype`, `nemo-speech`, and `gtk`/`null`.
+Unknown names are rejected when the config is loaded.
+
+`backend.audio = "pulse"` uses the PulseAudio simple API through ctypes, which
+PipeWire's `pipewire-pulse` server implements. Set it to `pw-record` if the
+Pulse compatibility server is unavailable.
 
 For a non-streaming server (whisper.cpp or any OpenAI-compatible
 faster-whisper server), set `backend.asr` to `whisper-cpp`, `openai-http`,
@@ -167,7 +187,9 @@ newest text remains visible. Geometry and typography are configurable under
 By default, the final transcript is copied to both the regular clipboard and
 the PRIMARY selection (middle-click paste). Set `primary_selection = false` if
 you do not want that. When the GTK daemon is running, clipboard writes use
-`Gdk.Clipboard`; headless daemons and failed GTK writes fall back to `wl-copy`.
+`Gdk.Clipboard`; otherwise the daemon owns the selection itself through a small
+native `ext-data-control-v1` client. If that protocol or the Wayland connection
+is unavailable, `wl-copy` is used as an optional fallback.
 
 ## Systemd
 

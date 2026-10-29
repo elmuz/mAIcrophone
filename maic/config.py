@@ -32,7 +32,7 @@ class Config:
     chunk_ms: int = 100
 
     backend_compositor: str = "niri"
-    backend_audio: str = "pw-record"
+    backend_audio: str = "pulse"
     backend_injection: str = "wtype"
     backend_asr: str = "nemo-speech"
     backend_overlay: str = "gtk"

@@ -150,20 +150,22 @@ speech_contexts / word boosting = off in v1
 
 ## 6. Audio capture
 
-**[proposed]** Start with `pw-record` subprocess:
+Current default: the PulseAudio simple API via ctypes
+(`maic/backends/pulse.py`), which PipeWire implements through
+`pipewire-pulse`.
 
-```text
-pw-record --raw --format s16 --rate 16000 --channels 1 -
-```
+- Capture PCM16/16 kHz/mono in a dedicated reader thread.
+- Read in 10 ms frames, aggregate to the configured chunk size, and compute
+  RMS/peak for the VU meter client-side.
+- Device selection uses the configured Pulse source name.
+- Stop the reader before freeing the Pulse stream; this avoids aborting
+  libpulse when a blocking read is still in flight.
 
-- Read raw PCM from stdout.
-- Compute RMS for the VU meter client-side.
-- On stop: terminate child, wait briefly, then commit.
-- Device selection: `--target <name>` from config; default source otherwise.
-- Native PipeWire bindings are a later optimization, not MVP.
-
-Reasons: no bindings build step; easy to debug; PipeWire handles device
-selection/resampling. The process overhead is negligible.
+`pw-record` remains available as `backend.audio = "pw-record"`. It is a
+subprocess with no binding concerns, but adds a runtime executable dependency.
+Native PipeWire stream bindings are still a later optimization: the C API uses
+SPA pod construction and realtime callbacks, which is disproportionate to the
+current requirement.
 
 ## 7. Overlay
 
@@ -172,8 +174,8 @@ selection/resampling. The process overhead is negligible.
 Properties:
 
 - anchored bottom centre of the **focused output** at recording start,
-- output selected with `niri msg --json focused-output` (`name` + `logical`
-  width/height),
+- output selected through the native Niri IPC socket (`FocusedOutput`, with
+  `name` + `logical` width/height),
 - width: min(75% of output width, ~2000 px),
 - height: dynamic, grows upward from the bottom margin,
 - max height: ~30% of the output's logical height,
@@ -221,11 +223,11 @@ Decision: stay on Python + GTK4 for now. Re-evaluate under the gates in
 
 - Final text only.
 - Target locking:
-  - capture `niri msg --json focused-window` at record start,
+  - capture the focused window through the Niri IPC socket at record start,
   - the target is the window `id`, not the title,
   - the user may focus another window while dictating; that does not abort,
-  - before injection, if the target is no longer focused, call
-    `niri msg action focus-window --id <id>` to return to the original target,
+  - before injection, if the target is no longer focused, send a Niri
+    `FocusWindow` IPC action to return to the original target,
   - if the original target no longer exists, do not type; copy transcript to
     clipboard and show a notification,
   - title changes are ignored; `id`/`pid` identify the target.
@@ -233,8 +235,9 @@ Decision: stay on Python + GTK4 for now. Re-evaluate under the gates in
 - Unicode/Italian: `wtype` tested OK.
 - Clipboard:
   - optional `copy_to_clipboard` on every successful session,
-  - `Gdk.Clipboard` when the GTK daemon is running, `wl-copy` as the headless
-    and failure fallback,
+  - `Gdk.Clipboard` when the GTK daemon is running,
+  - native Wayland `ext-data-control-v1` client for headless daemons,
+  - `wl-copy` only as an optional failure fallback,
   - optional primary-selection mode for middle-click paste,
   - clipboard fallback when injection is impossible.
   - Overwriting the clipboard is acceptable by user preference; the only real
@@ -341,7 +344,7 @@ speaking for 30 seconds.
 - If not ready:
   - show overlay error immediately,
   - send an optional desktop notification (Mako already installed),
-  - do not spawn `pw-record` or open a WebSocket.
+  - do not start audio capture or open a WebSocket.
 - If the WebSocket fails to connect or drops mid-session:
   - stop capture,
   - show the error overlay,
@@ -377,7 +380,7 @@ primary feedback surface.
 ## 13. Suggested first vertical slice
 
 1. `maic daemon` + Unix socket + `maic toggle`.
-2. `pw-record` -> WS -> final transcript printed to journal.
+2. native audio capture -> WS -> final transcript printed to journal.
 3. Focusless GTK4 layer-shell overlay with status + VU + partial text.
 4. `wtype` final into the focused window.
 5. Niri focus guard + clipboard fallback.

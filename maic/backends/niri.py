@@ -1,39 +1,103 @@
-"""Niri compositor provider."""
+"""Niri compositor provider using the native IPC socket.
+
+Niri exposes a private, line-delimited JSON protocol on ``$NIRI_SOCKET``. The
+provider talks to that socket directly instead of spawning ``niri msg`` for
+every focus query. Requests and responses look like::
+
+    "FocusedWindow"
+    {"Ok": {"FocusedWindow": {"id": 3, ...}}}
+
+    {"Action": {"FocusWindow": {"id": 3}}}
+    {"Ok": "Handled"}
+
+The socket path is inherited from the Niri session when available. Services
+started outside Niri's environment (for example a systemd user unit) may not
+have ``NIRI_SOCKET`` set, so fall back to the newest Niri socket in
+``$XDG_RUNTIME_DIR``.
+"""
 
 from __future__ import annotations
 
 import asyncio
 import json
+import os
+from pathlib import Path
 
-from ..subprocess_env import child_env
 from .protocols import (
     CompositorCapabilities,
     OutputInfo,
     TargetWindow,
 )
 
-
-async def _run_json(*args: str) -> dict:
-    proc = await asyncio.create_subprocess_exec(
-        "niri",
-        "msg",
-        "--json",
-        *args,
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE,
-        env=child_env(),
-    )
-    out, err = await proc.communicate()
-    if proc.returncode != 0:
-        raise RuntimeError(err.decode(errors="replace").strip() or "niri msg failed")
-    return json.loads(out)
+_REQUEST_TIMEOUT = 2.0
 
 
-async def focused_window() -> TargetWindow | None:
-    try:
-        data = await _run_json("focused-window")
-    except Exception:
+def _socket_path() -> Path | None:
+    env_path = os.environ.get("NIRI_SOCKET")
+    if env_path:
+        path = Path(env_path)
+        if path.exists():
+            return path
+
+    runtime = os.environ.get("XDG_RUNTIME_DIR")
+    if not runtime:
         return None
+    candidates = []
+    for path in Path(runtime).glob("niri*.sock"):
+        try:
+            candidates.append((path.stat().st_mtime, path))
+        except FileNotFoundError:
+            # The socket disappeared between glob() and stat().
+            continue
+    if not candidates:
+        return None
+    return max(candidates, key=lambda item: item[0])[1]
+
+
+async def _request(payload: dict | str) -> object:
+    path = _socket_path()
+    if path is None:
+        raise RuntimeError("NIRI_SOCKET is not set and no niri socket was found")
+
+    try:
+        reader, writer = await asyncio.wait_for(
+            asyncio.open_unix_connection(path), timeout=_REQUEST_TIMEOUT
+        )
+    except asyncio.TimeoutError as exc:
+        raise RuntimeError("timed out connecting to the niri IPC socket") from exc
+    try:
+        writer.write((json.dumps(payload) + "\n").encode("utf-8"))
+        await writer.drain()
+        line = await asyncio.wait_for(reader.readline(), timeout=_REQUEST_TIMEOUT)
+    except asyncio.TimeoutError as exc:
+        raise RuntimeError("timed out waiting for the niri IPC response") from exc
+    finally:
+        writer.close()
+        try:
+            await writer.wait_closed()
+        except (BrokenPipeError, ConnectionResetError):
+            pass
+
+    if not line:
+        raise RuntimeError("niri closed the IPC connection without a response")
+    response = json.loads(line)
+    if "Err" in response:
+        raise RuntimeError(str(response["Err"]))
+    if "Ok" not in response:
+        raise RuntimeError(f"unexpected niri response: {response!r}")
+    result = response["Ok"]
+    # Reply data is wrapped with the request name, e.g.
+    # {"Ok": {"FocusedWindow": {...}}}. Actions reply with a plain string.
+    if isinstance(result, dict):
+        request_name = (
+            next(iter(payload)) if isinstance(payload, dict) else payload
+        )
+        if request_name in result:
+            return result[request_name]
+    return result
+
+
+def _target_from_json(data: dict | None) -> TargetWindow | None:
     if not data or not data.get("is_focused", True):
         return None
     try:
@@ -47,10 +111,8 @@ async def focused_window() -> TargetWindow | None:
         return None
 
 
-async def focused_output() -> OutputInfo | None:
-    try:
-        data = await _run_json("focused-output")
-    except Exception:
+def _output_from_json(data: dict | None) -> OutputInfo | None:
+    if not data:
         return None
     logical = data.get("logical") or {}
     try:
@@ -63,12 +125,36 @@ async def focused_output() -> OutputInfo | None:
         return None
 
 
+async def focused_window() -> TargetWindow | None:
+    try:
+        return _target_from_json(await _request("FocusedWindow"))
+    except Exception:
+        return None
+
+
+async def focused_output() -> OutputInfo | None:
+    try:
+        return _output_from_json(await _request("FocusedOutput"))
+    except Exception:
+        return None
+
+
 async def window_exists(window_id: int) -> bool:
     try:
-        windows = await _run_json("windows")
+        windows = await _request("Windows")
     except Exception:
         return False
-    return any(int(w.get("id", -1)) == window_id for w in windows)
+    if not isinstance(windows, list):
+        return False
+    for window in windows:
+        if not isinstance(window, dict):
+            continue
+        try:
+            if int(window.get("id", -1)) == window_id:
+                return True
+        except (TypeError, ValueError):
+            continue
+    return False
 
 
 async def current_focused_id() -> int | None:
@@ -77,19 +163,11 @@ async def current_focused_id() -> int | None:
 
 
 async def focus_window(window_id: int) -> bool:
-    proc = await asyncio.create_subprocess_exec(
-        "niri",
-        "msg",
-        "action",
-        "focus-window",
-        "--id",
-        str(window_id),
-        stdout=asyncio.subprocess.DEVNULL,
-        stderr=asyncio.subprocess.DEVNULL,
-        env=child_env(),
-    )
-    await proc.wait()
-    return proc.returncode == 0
+    try:
+        await _request({"Action": {"FocusWindow": {"id": window_id}}})
+    except Exception:
+        return False
+    return True
 
 
 class NiriCompositor:
