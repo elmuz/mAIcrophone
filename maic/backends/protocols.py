@@ -7,9 +7,9 @@ selected through configuration.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Callable, Literal, Protocol, runtime_checkable
-
+from typing import Literal, Protocol, runtime_checkable
 
 # Provider names accepted by the configuration. Keep these tuples in sync with
 # the factories in :mod:`maic.backends`.
@@ -102,19 +102,19 @@ class AsrEvent:
     text: str = ""
 
     @classmethod
-    def partial(cls, text: str) -> "AsrEvent":
+    def partial(cls, text: str) -> AsrEvent:
         return cls("partial", text)
 
     @classmethod
-    def final(cls, text: str) -> "AsrEvent":
+    def final(cls, text: str) -> AsrEvent:
         return cls("final", text)
 
     @classmethod
-    def committed(cls) -> "AsrEvent":
+    def committed(cls) -> AsrEvent:
         return cls("committed")
 
     @classmethod
-    def error(cls, message: str) -> "AsrEvent":
+    def error(cls, message: str) -> AsrEvent:
         return cls("error", message)
 
 

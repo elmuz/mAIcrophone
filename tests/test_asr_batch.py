@@ -4,6 +4,7 @@ import asyncio
 import io
 import unittest
 import wave
+from unittest import mock
 
 from maic.backends import build_backends
 from maic.backends.batch import (
@@ -95,8 +96,6 @@ class BatchSessionTests(unittest.TestCase):
             uploaded.append(pcm)
             return "hello batch"
 
-        provider.transcribe_pcm = fake_transcribe  # type: ignore[method-assign]
-
         async def scenario():
             session = provider.create_session(on_event=events.append)
             await session.connect()
@@ -107,7 +106,8 @@ class BatchSessionTests(unittest.TestCase):
             await session.close()
             return final
 
-        final = asyncio.run(scenario())
+        with mock.patch.object(provider, "transcribe_pcm", fake_transcribe):
+            final = asyncio.run(scenario())
         self.assertEqual(final, "hello batch")
         self.assertEqual(uploaded, [b"\x01\x00\x02\x00"])
         self.assertEqual(
@@ -136,8 +136,6 @@ class BatchSessionTests(unittest.TestCase):
             uploaded.append(pcm)
             return "should not happen"
 
-        provider.transcribe_pcm = fake_transcribe  # type: ignore[method-assign]
-
         async def scenario():
             session = provider.create_session(on_event=events.append)
             await session.connect()
@@ -145,7 +143,8 @@ class BatchSessionTests(unittest.TestCase):
             await session.cancel()
             await session.close()
 
-        asyncio.run(scenario())
+        with mock.patch.object(provider, "transcribe_pcm", fake_transcribe):
+            asyncio.run(scenario())
         self.assertEqual(uploaded, [])
         self.assertEqual(events, [])
 
@@ -153,9 +152,10 @@ class BatchSessionTests(unittest.TestCase):
 class ConfigTests(unittest.TestCase):
     def test_batch_protocol_is_validated(self):
         with self.assertRaises(ValueError):
-            from maic.config import load_config
             import tempfile
             from pathlib import Path
+
+            from maic.config import load_config
 
             with tempfile.TemporaryDirectory() as tmp:
                 path = Path(tmp) / "config.toml"

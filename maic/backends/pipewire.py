@@ -53,7 +53,7 @@ class PwRecordAudioCapture:
             self.proc.terminate()
         try:
             await asyncio.wait_for(self.proc.wait(), timeout=2.0)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             self.proc.kill()
             await self.proc.wait()
         self.proc = None

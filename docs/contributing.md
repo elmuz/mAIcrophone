@@ -27,10 +27,14 @@ roadmap for the gates that would change that.
 3. Make the smallest coherent change.
 4. Add or update tests for behaviour changes.
 5. Update the relevant documentation.
-6. Run the full test suite:
+6. Run the full quality gate:
 
    ```bash
-   python -m unittest discover -s tests -v
+   uv sync --locked
+   uv run ruff format --check .
+   uv run ruff check .
+   uv run ty check
+   uv run python -m unittest discover -s tests -v
    ```
 
 7. Open a pull request with a short description of the problem, the approach,
@@ -86,7 +90,7 @@ change separately.
 The default suite uses only `unittest` and must run without a live desktop:
 
 ```bash
-python -m unittest discover -s tests -v
+uv run python -m unittest discover -s tests -v
 ```
 
 For behaviour changes, add tests at the lowest useful level:

@@ -118,8 +118,7 @@ async def main(seconds: float, url: str) -> None:
                 sent_bytes += len(data)
 
             print(
-                f"SENT    {sent_bytes} bytes "
-                f"(~{sent_bytes / (RATE * 2):.1f}s of audio)",
+                f"SENT    {sent_bytes} bytes (~{sent_bytes / (RATE * 2):.1f}s of audio)",
                 flush=True,
             )
             proc.terminate()
@@ -135,8 +134,6 @@ async def main(seconds: float, url: str) -> None:
 if __name__ == "__main__":
     seconds = float(sys.argv[1]) if len(sys.argv) > 1 else 5.0
     url = (
-        sys.argv[2]
-        if len(sys.argv) > 2
-        else "ws://127.0.0.1:8080/v1/audio/transcriptions/realtime"
+        sys.argv[2] if len(sys.argv) > 2 else "ws://127.0.0.1:8080/v1/audio/transcriptions/realtime"
     )
     asyncio.run(main(seconds, url))

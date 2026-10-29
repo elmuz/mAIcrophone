@@ -53,10 +53,8 @@ def _multipart(
     for name, value in fields:
         parts.append(
             (
-                f"--{boundary}\r\n"
-                f'Content-Disposition: form-data; name="{name}"\r\n\r\n'
-                f"{value}\r\n"
-            ).encode("utf-8")
+                f'--{boundary}\r\nContent-Disposition: form-data; name="{name}"\r\n\r\n{value}\r\n'
+            ).encode()
         )
     parts.append(
         (
@@ -64,11 +62,11 @@ def _multipart(
             f'Content-Disposition: form-data; name="{file_field}"; '
             f'filename="{filename}"\r\n'
             f"Content-Type: {content_type}\r\n\r\n"
-        ).encode("utf-8")
+        ).encode()
         + content
         + b"\r\n"
     )
-    parts.append(f"--{boundary}--\r\n".encode("utf-8"))
+    parts.append(f"--{boundary}--\r\n".encode())
     return b"".join(parts), f"multipart/form-data; boundary={boundary}"
 
 
@@ -118,7 +116,7 @@ class BatchHttpSession:
         supports_endpointing=False,
     )
 
-    def __init__(self, provider: "BatchHttpProvider", on_event: AsrEventListener):
+    def __init__(self, provider: BatchHttpProvider, on_event: AsrEventListener):
         self.provider = provider
         self.cfg = provider.cfg
         self.on_event = on_event

@@ -63,13 +63,13 @@ async def _request(payload: dict | str) -> object:
         reader, writer = await asyncio.wait_for(
             asyncio.open_unix_connection(path), timeout=_REQUEST_TIMEOUT
         )
-    except asyncio.TimeoutError as exc:
+    except TimeoutError as exc:
         raise RuntimeError("timed out connecting to the niri IPC socket") from exc
     try:
         writer.write((json.dumps(payload) + "\n").encode("utf-8"))
         await writer.drain()
         line = await asyncio.wait_for(reader.readline(), timeout=_REQUEST_TIMEOUT)
-    except asyncio.TimeoutError as exc:
+    except TimeoutError as exc:
         raise RuntimeError("timed out waiting for the niri IPC response") from exc
     finally:
         writer.close()
@@ -89,16 +89,14 @@ async def _request(payload: dict | str) -> object:
     # Reply data is wrapped with the request name, e.g.
     # {"Ok": {"FocusedWindow": {...}}}. Actions reply with a plain string.
     if isinstance(result, dict):
-        request_name = (
-            next(iter(payload)) if isinstance(payload, dict) else payload
-        )
+        request_name = next(iter(payload)) if isinstance(payload, dict) else payload
         if request_name in result:
             return result[request_name]
     return result
 
 
-def _target_from_json(data: dict | None) -> TargetWindow | None:
-    if not data or not data.get("is_focused", True):
+def _target_from_json(data: object) -> TargetWindow | None:
+    if not isinstance(data, dict) or not data.get("is_focused", True):
         return None
     try:
         return TargetWindow(
@@ -111,10 +109,12 @@ def _target_from_json(data: dict | None) -> TargetWindow | None:
         return None
 
 
-def _output_from_json(data: dict | None) -> OutputInfo | None:
-    if not data:
+def _output_from_json(data: object) -> OutputInfo | None:
+    if not isinstance(data, dict):
         return None
-    logical = data.get("logical") or {}
+    logical = data.get("logical")
+    if not isinstance(logical, dict):
+        logical = {}
     try:
         return OutputInfo(
             name=str(data.get("name", "")),

@@ -33,7 +33,7 @@ async def _run_detached(*args: str, stdin: bytes | None = None) -> int:
     )
     try:
         await asyncio.wait_for(proc.communicate(stdin), timeout=5)
-    except asyncio.TimeoutError:
+    except TimeoutError:
         proc.kill()
         await proc.wait()
         return 124
@@ -100,11 +100,7 @@ class GtkClipboard:
                 display = Gdk.Display.get_default()
                 if display is None:
                     raise RuntimeError("no GDK display")
-                clipboard = (
-                    display.get_primary_clipboard()
-                    if primary
-                    else display.get_clipboard()
-                )
+                clipboard = display.get_primary_clipboard() if primary else display.get_clipboard()
                 provider = Gdk.ContentProvider.new_for_bytes(
                     "text/plain;charset=utf-8",
                     GLib.Bytes.new(text.encode("utf-8")),

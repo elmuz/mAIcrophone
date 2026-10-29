@@ -77,9 +77,7 @@ class PulseAudioCapture:
 
     def __init__(self, cfg: Config):
         self.cfg = cfg
-        self.capabilities = AudioCapabilities(
-            sample_rate=cfg.sample_rate, channels=1
-        )
+        self.capabilities = AudioCapabilities(sample_rate=cfg.sample_rate, channels=1)
         self._api: _PulseSimple | None = None
         self._stream: int | None = None
         self._queue: queue.Queue[bytes | None] | None = None
@@ -118,9 +116,7 @@ class PulseAudioCapture:
             ctypes.byref(error),
         )
         if not stream:
-            raise RuntimeError(
-                f"cannot open PulseAudio source: {api.error_text(error.value)}"
-            )
+            raise RuntimeError(f"cannot open PulseAudio source: {api.error_text(error.value)}")
         self._api = api
         self._stream = stream
         self._queue = queue.Queue(maxsize=64)
@@ -132,9 +128,7 @@ class PulseAudioCapture:
         chunk_bytes = self.cfg.chunk_bytes
         # Read in short frames so stop() is not stuck behind a large blocking
         # pa_simple_read(). Outgoing chunks keep the configured size.
-        read_bytes = min(
-            chunk_bytes, max(2, int(self.cfg.sample_rate * 2 * 0.01))
-        )
+        read_bytes = min(chunk_bytes, max(2, int(self.cfg.sample_rate * 2 * 0.01)))
         pending = bytearray()
         error = ctypes.c_int(0)
         while not self._stop.is_set():

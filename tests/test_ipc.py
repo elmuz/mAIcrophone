@@ -198,17 +198,13 @@ class DaemonDispatchTests(unittest.TestCase):
 
     def test_invalid_language_type(self):
         daemon, _, _ = make_daemon()
-        response = asyncio.run(
-            daemon.dispatch(make_request("language", language=12))
-        )
+        response = asyncio.run(daemon.dispatch(make_request("language", language=12)))
         self.assertFalse(response["ok"])
         self.assertEqual(response["code"], "invalid_argument")
 
     def test_language_is_set_and_reflected_in_status(self):
         daemon, _, overlay = make_daemon()
-        response = asyncio.run(
-            daemon.dispatch(make_request("language", language="it-IT"))
-        )
+        response = asyncio.run(daemon.dispatch(make_request("language", language="it-IT")))
         self.assertEqual(response, ok(language="it-IT"))
         self.assertEqual(daemon.cfg.language, "it-IT")
         self.assertEqual(overlay.languages, ["it-IT"])
@@ -221,9 +217,7 @@ class DaemonDispatchTests(unittest.TestCase):
 
     def test_type_injects_normalized_text(self):
         daemon, injection, _ = make_daemon()
-        response = asyncio.run(
-            daemon.dispatch(make_request("type", text="  hello\nworld  "))
-        )
+        response = asyncio.run(daemon.dispatch(make_request("type", text="  hello\nworld  ")))
         self.assertTrue(response["ok"])
         self.assertEqual(injection.typed, ["hello world"])
 

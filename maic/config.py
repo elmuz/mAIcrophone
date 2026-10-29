@@ -102,9 +102,7 @@ def load_config(path: Path | None = None) -> Config:
     injection = _section(raw, "injection")
 
     cfg.server_url = str(server.get("url", cfg.server_url))
-    cfg.server_poll_seconds = int(
-        server.get("poll_seconds", cfg.server_poll_seconds)
-    )
+    cfg.server_poll_seconds = int(server.get("poll_seconds", cfg.server_poll_seconds))
     cfg.language = str(asr.get("language", cfg.language))
     cfg.punctuation = bool(asr.get("punctuation", cfg.punctuation))
     cfg.batch_url = str(asr.get("batch_url", cfg.batch_url))
@@ -116,60 +114,34 @@ def load_config(path: Path | None = None) -> Config:
     cfg.sample_rate = int(audio.get("sample_rate", cfg.sample_rate))
     cfg.chunk_ms = int(audio.get("chunk_ms", cfg.chunk_ms))
 
-    cfg.backend_compositor = str(
-        backend.get("compositor", cfg.backend_compositor)
-    )
+    cfg.backend_compositor = str(backend.get("compositor", cfg.backend_compositor))
     cfg.backend_audio = str(backend.get("audio", cfg.backend_audio))
-    cfg.backend_injection = str(
-        backend.get("injection", cfg.backend_injection)
-    )
+    cfg.backend_injection = str(backend.get("injection", cfg.backend_injection))
     cfg.backend_asr = str(backend.get("asr", cfg.backend_asr))
     cfg.backend_overlay = str(backend.get("overlay", cfg.backend_overlay))
 
     cfg.overlay_enabled = bool(overlay.get("enabled", cfg.overlay_enabled))
-    cfg.overlay_width_percent = int(
-        overlay.get("width_percent", cfg.overlay_width_percent)
-    )
-    cfg.overlay_max_width_px = int(
-        overlay.get("max_width_px", cfg.overlay_max_width_px)
-    )
+    cfg.overlay_width_percent = int(overlay.get("width_percent", cfg.overlay_width_percent))
+    cfg.overlay_max_width_px = int(overlay.get("max_width_px", cfg.overlay_max_width_px))
     cfg.overlay_max_height_percent = int(
         overlay.get("max_height_percent", cfg.overlay_max_height_percent)
     )
     cfg.overlay_margin_px = int(overlay.get("margin_px", cfg.overlay_margin_px))
     cfg.overlay_font = str(overlay.get("font", cfg.overlay_font))
-    cfg.overlay_max_lines = int(
-        overlay.get("max_lines", cfg.overlay_max_lines)
-    )
-    cfg.overlay_min_font_size = int(
-        overlay.get("min_font_size", cfg.overlay_min_font_size)
-    )
-    cfg.overlay_font_steps = int(
-        overlay.get("font_steps", cfg.overlay_font_steps)
-    )
-    cfg.overlay_corner_radius = int(
-        overlay.get("corner_radius", cfg.overlay_corner_radius)
-    )
-    cfg.overlay_border_width = int(
-        overlay.get("border_width", cfg.overlay_border_width)
-    )
+    cfg.overlay_max_lines = int(overlay.get("max_lines", cfg.overlay_max_lines))
+    cfg.overlay_min_font_size = int(overlay.get("min_font_size", cfg.overlay_min_font_size))
+    cfg.overlay_font_steps = int(overlay.get("font_steps", cfg.overlay_font_steps))
+    cfg.overlay_corner_radius = int(overlay.get("corner_radius", cfg.overlay_corner_radius))
+    cfg.overlay_border_width = int(overlay.get("border_width", cfg.overlay_border_width))
     cfg.overlay_background_opacity = float(
         overlay.get("background_opacity", cfg.overlay_background_opacity)
     )
 
-    cfg.copy_to_clipboard = bool(
-        injection.get("copy_to_clipboard", cfg.copy_to_clipboard)
-    )
-    cfg.primary_selection = bool(
-        injection.get("primary_selection", cfg.primary_selection)
-    )
-    cfg.return_to_target = bool(
-        injection.get("return_to_target", cfg.return_to_target)
-    )
+    cfg.copy_to_clipboard = bool(injection.get("copy_to_clipboard", cfg.copy_to_clipboard))
+    cfg.primary_selection = bool(injection.get("primary_selection", cfg.primary_selection))
+    cfg.return_to_target = bool(injection.get("return_to_target", cfg.return_to_target))
     cfg.multiline = str(injection.get("multiline", cfg.multiline))
-    cfg.long_text_threshold = int(
-        injection.get("long_text_threshold", cfg.long_text_threshold)
-    )
+    cfg.long_text_threshold = int(injection.get("long_text_threshold", cfg.long_text_threshold))
     replacements = raw.get("replacements", {})
     if isinstance(replacements, dict):
         cfg.replacements = {str(k): str(v) for k, v in replacements.items()}
@@ -198,8 +170,7 @@ def load_config(path: Path | None = None) -> Config:
         )
     if cfg.backend_asr not in ASR_PROVIDERS:
         raise ValueError(
-            f"invalid backend.asr: {cfg.backend_asr!r} "
-            f"(choose from {', '.join(ASR_PROVIDERS)})"
+            f"invalid backend.asr: {cfg.backend_asr!r} (choose from {', '.join(ASR_PROVIDERS)})"
         )
     if cfg.backend_overlay not in OVERLAY_PROVIDERS:
         raise ValueError(
@@ -210,8 +181,7 @@ def load_config(path: Path | None = None) -> Config:
         raise ValueError(f"invalid injection.multiline: {cfg.multiline!r}")
     if cfg.batch_protocol not in {"openai", "whisper-cpp"}:
         raise ValueError(
-            f"invalid asr.batch_protocol: {cfg.batch_protocol!r} "
-            "(choose from openai, whisper-cpp)"
+            f"invalid asr.batch_protocol: {cfg.batch_protocol!r} (choose from openai, whisper-cpp)"
         )
     if not 1.0 <= cfg.batch_timeout <= 600.0:
         raise ValueError("asr.batch_timeout must be between 1 and 600 seconds")

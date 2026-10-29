@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from html import escape
 import math
+from html import escape
 
 import cairo
 import gi
@@ -59,7 +59,7 @@ def vu_bar(value: float, width: int = 14) -> str:
     level = meter_level(value)
     if level <= 0:
         return " " * width
-    filled = int(round(level * width))
+    filled = round(level * width)
     return "█" * filled + " " * (width - filled)
 
 
@@ -67,7 +67,7 @@ def vu_bar_markup(value: float, width: int = 14) -> str:
     level = meter_level(value)
     if level <= 0:
         return " " * width
-    filled = int(round(level * width))
+    filled = round(level * width)
     green_end = int(width * 0.65)
     yellow_end = int(width * 0.85)
     chars = []
@@ -94,7 +94,7 @@ def _font_parts(font: str) -> tuple[str, int]:
     fd = Pango.FontDescription.from_string(font or "monospace 14")
     family = fd.get_family() or "monospace"
     size = fd.get_size() / Pango.SCALE if fd.get_size() > 0 else 14
-    return family, max(8, int(round(size)))
+    return family, max(8, round(size))
 
 
 def _font_steps(base: int, minimum: int, count: int) -> list[int]:
@@ -174,7 +174,7 @@ scrollbar {{
     min-width: 0;
     min-height: 0;
 }}
-""".encode("utf-8")
+""".encode()
 
     def _build(self) -> None:
         self.window = Gtk.Window()
@@ -230,9 +230,7 @@ scrollbar {{
         self.layer_shell.set_anchor(self.window, self.layer_shell.Edge.BOTTOM, True)
         self.layer_shell.set_anchor(self.window, self.layer_shell.Edge.LEFT, True)
         self.layer_shell.set_anchor(self.window, self.layer_shell.Edge.RIGHT, False)
-        self.layer_shell.set_keyboard_mode(
-            self.window, self.layer_shell.KeyboardMode.NONE
-        )
+        self.layer_shell.set_keyboard_mode(self.window, self.layer_shell.KeyboardMode.NONE)
         self.window.set_visible(False)
 
     def _on_realize(self, window) -> None:
@@ -256,14 +254,13 @@ scrollbar {{
         return None
 
     def _line_height(self, font_size: int) -> int:
-        return max(12, int(round(font_size * 1.45)))
+        return max(12, round(font_size * 1.45))
 
     def _count_lines(self, text: str, font_size: int) -> int:
+        assert self.text is not None
         layout = Pango.Layout(self.text.get_pango_context())
         layout.set_font_description(
-            Pango.FontDescription.from_string(
-                f'{self._font_family} {font_size}'
-            )
+            Pango.FontDescription.from_string(f"{self._font_family} {font_size}")
         )
         layout.set_width(self.content_width * Pango.SCALE)
         layout.set_wrap(Pango.WrapMode.WORD_CHAR)
@@ -292,9 +289,7 @@ scrollbar {{
         line_height = self._line_height(font_size)
         chrome_height = 56
         available_lines = max(1, (self.max_height - chrome_height) // line_height)
-        visible_lines = max(
-            1, min(lines, self.cfg.overlay_max_lines, available_lines)
-        )
+        visible_lines = max(1, min(lines, self.cfg.overlay_max_lines, available_lines))
         text_height = visible_lines * line_height
         total_height = min(self.max_height, chrome_height + text_height)
 
@@ -337,11 +332,7 @@ scrollbar {{
             server_color = NORD_RED
         else:
             server_color = NORD_YELLOW
-        rec_dot = (
-            f'<span foreground="{NORD_RED}">●</span> '
-            if state == "REC"
-            else ""
-        )
+        rec_dot = f'<span foreground="{NORD_RED}">●</span> ' if state == "REC" else ""
         return (
             f"{rec_dot}"
             f'<span foreground="{state_color}" weight="bold">'
@@ -354,11 +345,9 @@ scrollbar {{
 
     def _refresh_status(self) -> None:
         if self.status is not None:
-            self.status.set_markup(
-                self._status_markup(self._state, self._last_rms)
-            )
+            self.status.set_markup(self._status_markup(self._state, self._last_rms))
 
-    def _start_ui(self, output: OutputInfo, state: str) -> None:
+    def _start_ui(self, output: OutputInfo, state: str) -> bool:
         assert self.window is not None and self.status is not None
         self.output = output
         self.width = min(
@@ -366,9 +355,7 @@ scrollbar {{
             max(320, int(output.width * self.cfg.overlay_width_percent / 100)),
         )
         self.content_width = self.width - 40
-        self.max_height = max(
-            120, int(output.height * self.cfg.overlay_max_height_percent / 100)
-        )
+        self.max_height = max(120, int(output.height * self.cfg.overlay_max_height_percent / 100))
         monitor = self._find_monitor(output.name)
         if monitor is not None:
             self.layer_shell.set_monitor(self.window, monitor)
@@ -376,9 +363,7 @@ scrollbar {{
             self.cfg.overlay_margin_px,
             (output.width - self.width) // 2,
         )
-        self.layer_shell.set_margin(
-            self.window, self.layer_shell.Edge.LEFT, left_margin
-        )
+        self.layer_shell.set_margin(self.window, self.layer_shell.Edge.LEFT, left_margin)
         self.layer_shell.set_margin(
             self.window, self.layer_shell.Edge.BOTTOM, self.cfg.overlay_margin_px
         )
@@ -478,4 +463,3 @@ scrollbar {{
             self.window.destroy()
             self.window = None
         return False
-

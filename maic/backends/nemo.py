@@ -7,6 +7,7 @@ import json
 import logging
 import time
 import urllib.request
+
 import websockets
 
 from ..config import Config
@@ -157,7 +158,7 @@ class NemoRealtimeSession:
             log.info("final received after %.2fs", time.monotonic() - started)
             await asyncio.wait_for(self.committed_event.wait(), timeout=timeout)
             log.info("committed received after %.2fs", time.monotonic() - started)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             self.on_event(AsrEvent.error("timed out waiting for final transcript"))
             return None
         return self.final_text

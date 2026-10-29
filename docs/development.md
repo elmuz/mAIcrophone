@@ -108,19 +108,32 @@ scripts/maic-layer-shell daemon
 The systemd unit sets the same `LD_PRELOAD` in its service environment. Do not
 move this workaround into application logic.
 
-## Tests
+## Tests and quality checks
+
+Development tooling is managed with [uv](https://docs.astral.sh/uv/). The
+`dev` dependency group includes [Ruff](https://docs.astral.sh/ruff/) for
+formatting and linting, and [ty](https://docs.astral.sh/ty/) for type checking:
+
+```bash
+uv sync --locked
+
+uv run ruff format --check .
+uv run ruff check .
+uv run ty check
+uv run python -m unittest discover -s tests -v
+```
 
 The test suite uses only the standard library:
 
 ```bash
-python -m unittest discover -s tests -v
+uv run python -m unittest discover -s tests -v
 ```
 
 Run a single module or test:
 
 ```bash
-python -m unittest tests.test_config -v
-python -m unittest tests.test_ipc.DaemonDispatchTests -v
+uv run python -m unittest tests.test_config -v
+uv run python -m unittest tests.test_ipc.DaemonDispatchTests -v
 ```
 
 Tests must not require GTK, a live Niri session, PipeWire, an ASR server, or

@@ -5,8 +5,8 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from .protocols import (
-    AUDIO_PROVIDERS,
     ASR_PROVIDERS,
+    AUDIO_PROVIDERS,
     COMPOSITOR_PROVIDERS,
     INJECTION_PROVIDERS,
     Backends,
@@ -36,9 +36,7 @@ def _build_audio(name: str, cfg: Config):
         from .pipewire import PwRecordAudioCapture
 
         return PwRecordAudioCapture(cfg)
-    raise ValueError(
-        f"unknown backend.audio {name!r}; choose from {', '.join(AUDIO_PROVIDERS)}"
-    )
+    raise ValueError(f"unknown backend.audio {name!r}; choose from {', '.join(AUDIO_PROVIDERS)}")
 
 
 def _build_injection(name: str, cfg: Config, clipboard: Clipboard | None = None):
@@ -65,9 +63,7 @@ def _build_asr(name: str, cfg: Config):
             "whisper-cpp": "whisper-cpp",
         }.get(name)
         return BatchHttpProvider(cfg, protocol)
-    raise ValueError(
-        f"unknown backend.asr {name!r}; choose from {', '.join(ASR_PROVIDERS)}"
-    )
+    raise ValueError(f"unknown backend.asr {name!r}; choose from {', '.join(ASR_PROVIDERS)}")
 
 
 def build_backends(cfg: Config, clipboard: Clipboard | None = None) -> Backends:

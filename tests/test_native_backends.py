@@ -9,9 +9,9 @@ from pathlib import Path
 from unittest import mock
 
 from maic.backends import niri
+from maic.backends.protocols import AudioStats
 from maic.backends.pulse import PulseAudioCapture
 from maic.config import Config
-from maic.backends.protocols import AudioStats
 
 
 class NiriJsonTests(unittest.TestCase):
@@ -31,9 +31,7 @@ class NiriJsonTests(unittest.TestCase):
         self.assertEqual(window.app_id, "kitty")
 
     def test_unfocused_window_is_ignored(self):
-        self.assertIsNone(
-            niri._target_from_json({"id": 42, "is_focused": False})
-        )
+        self.assertIsNone(niri._target_from_json({"id": 42, "is_focused": False}))
 
     def test_output_logical_size_is_parsed(self):
         output = niri._output_from_json(
@@ -87,9 +85,7 @@ class NiriIpcTests(unittest.IsolatedAsyncioTestCase):
         self.path = Path(self._tmp.name) / "niri.sock"
         self.requests: list[object] = []
         self.responses: list[object] = []
-        self.server = await asyncio.start_unix_server(
-            self._handle, path=str(self.path)
-        )
+        self.server = await asyncio.start_unix_server(self._handle, path=str(self.path))
         self.patch = mock.patch.object(niri, "_socket_path", return_value=self.path)
         self.patch.start()
 
@@ -133,9 +129,7 @@ class NiriIpcTests(unittest.IsolatedAsyncioTestCase):
     async def test_focus_action_sends_window_id(self):
         self.responses.append({"Ok": "Handled"})
         self.assertTrue(await niri.focus_window(42))
-        self.assertEqual(
-            self.requests, [{"Action": {"FocusWindow": {"id": 42}}}]
-        )
+        self.assertEqual(self.requests, [{"Action": {"FocusWindow": {"id": 42}}}])
 
     async def test_window_exists_tolerates_malformed_entries(self):
         self.responses.append(

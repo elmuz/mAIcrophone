@@ -155,9 +155,7 @@ class Daemon:
             try:
                 payload = json.loads(line)
             except json.JSONDecodeError as exc:
-                raise IpcProtocolError(
-                    "bad_request", f"invalid JSON: {exc.msg}"
-                ) from exc
+                raise IpcProtocolError("bad_request", f"invalid JSON: {exc.msg}") from exc
             request = validate_request(payload)
             response = await self.dispatch(request)
         except IpcProtocolError as exc:
@@ -197,9 +195,7 @@ class Daemon:
             "language": self.cfg.language,
             "server_ready": self.server_ready,
             "server_status": server_status,
-            "overlay": bool(
-                self.cfg.overlay_enabled and self.cfg.backend_overlay != "null"
-            ),
+            "overlay": bool(self.cfg.overlay_enabled and self.cfg.backend_overlay != "null"),
             "version": __version__,
             "session": session,
         }
@@ -341,7 +337,7 @@ class Daemon:
             cancel_task = asyncio.create_task(session.cancel_event.wait())
             error_task = asyncio.create_task(session.error_event.wait())
 
-            done, pending = await asyncio.wait(
+            _done, pending = await asyncio.wait(
                 {stop_task, cancel_task, error_task},
                 return_when=asyncio.FIRST_COMPLETED,
             )
@@ -366,7 +362,7 @@ class Daemon:
                 try:
                     await asyncio.wait_for(audio_task, timeout=2)
                     log.info("audio task finished after %.2fs", time.monotonic() - stop_started)
-                except (asyncio.TimeoutError, asyncio.CancelledError):
+                except (TimeoutError, asyncio.CancelledError):
                     audio_task.cancel()
                     log.info("audio task cancelled after %.2fs", time.monotonic() - stop_started)
             final = await asr.commit()

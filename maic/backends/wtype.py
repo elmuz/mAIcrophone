@@ -23,7 +23,7 @@ async def _run(*args: str, stdin: bytes | None = None) -> tuple[int, bytes, byte
     )
     try:
         out, err = await asyncio.wait_for(proc.communicate(stdin), timeout=15)
-    except asyncio.TimeoutError:
+    except TimeoutError:
         proc.kill()
         await proc.wait()
         return 124, b"", b"timed out"
@@ -82,11 +82,11 @@ async def type_text(text: str, cfg: Config) -> bool:
                     log.warning("wtype failed (%s): %s", code, err.decode(errors="replace").strip())
                     return False
             if i < len(lines) - 1:
-                code, _, err = await _run(
-                    "wtype", "-M", "shift", "-k", "Return", "-m", "shift"
-                )
+                code, _, err = await _run("wtype", "-M", "shift", "-k", "Return", "-m", "shift")
                 if code != 0:
-                    log.warning("wtype newline failed (%s): %s", code, err.decode(errors="replace").strip())
+                    log.warning(
+                        "wtype newline failed (%s): %s", code, err.decode(errors="replace").strip()
+                    )
                     return False
         return True
     code, _, err = await _wtype_text(text)
@@ -114,9 +114,7 @@ class WtypeInjector:
 
                 self.clipboard = WaylandClipboard()
             except Exception as exc:
-                log.warning(
-                    "native Wayland clipboard unavailable (%s); using wl-copy", exc
-                )
+                log.warning("native Wayland clipboard unavailable (%s); using wl-copy", exc)
                 self.clipboard = SubprocessClipboard()
                 self.clipboard_fallback = None
                 return

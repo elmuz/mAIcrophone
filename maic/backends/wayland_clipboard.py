@@ -20,6 +20,7 @@ import logging
 import os
 import threading
 from dataclasses import dataclass
+from typing import Any
 
 log = logging.getLogger("maic")
 
@@ -67,7 +68,7 @@ class _WlArgument(ctypes.Union):
 _KEEP_ALIVE: list[object] = []
 
 
-def _pointer(interface: _WlInterface | ctypes.POINTER(_WlInterface)):
+def _pointer(interface: Any) -> Any:
     if isinstance(interface, ctypes.POINTER(_WlInterface)):
         return interface
     return ctypes.pointer(interface)
@@ -181,7 +182,7 @@ class _LibWayland:
         interface: _WlInterface,
         args: list[tuple[str, object]] | None = None,
     ) -> int:
-        values = [("n", 0)] + list(args or [])
+        values = [("n", 0), *list(args or [])]
         array = (_WlArgument * len(values))()
         for index, (kind, value) in enumerate(values):
             setattr(array[index], kind, value)
@@ -195,7 +196,7 @@ class _LibWayland:
     def add_listener(
         self,
         proxy: int,
-        callbacks: list[ctypes._CFuncPtr],
+        callbacks: list[Any],
         *,
         keep_alive: bool = True,
     ):
@@ -218,18 +219,10 @@ _L = _LibWayland()
 _REGISTRY_GLOBAL = ctypes.CFUNCTYPE(
     None, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint32, ctypes.c_char_p, ctypes.c_uint32
 )
-_REGISTRY_GLOBAL_REMOVE = ctypes.CFUNCTYPE(
-    None, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint32
-)
-_SEAT_CAPABILITIES = ctypes.CFUNCTYPE(
-    None, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint32
-)
-_DEVICE_DATA_OFFER = ctypes.CFUNCTYPE(
-    None, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p
-)
-_DEVICE_SELECTION = ctypes.CFUNCTYPE(
-    None, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p
-)
+_REGISTRY_GLOBAL_REMOVE = ctypes.CFUNCTYPE(None, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint32)
+_SEAT_CAPABILITIES = ctypes.CFUNCTYPE(None, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint32)
+_DEVICE_DATA_OFFER = ctypes.CFUNCTYPE(None, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p)
+_DEVICE_SELECTION = ctypes.CFUNCTYPE(None, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p)
 _DEVICE_FINISHED = ctypes.CFUNCTYPE(None, ctypes.c_void_p, ctypes.c_void_p)
 _SOURCE_SEND = ctypes.CFUNCTYPE(
     None, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_char_p, ctypes.c_int
@@ -248,8 +241,11 @@ _SOURCE_INTERFACE = _make_interface(
 )
 _DEVICE_INTERFACE = _make_interface(
     "ext_data_control_device_v1",
-    [("set_selection", "?o", [_SOURCE_INTERFACE]), ("destroy", "", []),
-     ("set_primary_selection", "?o", [_SOURCE_INTERFACE])],
+    [
+        ("set_selection", "?o", [_SOURCE_INTERFACE]),
+        ("destroy", "", []),
+        ("set_primary_selection", "?o", [_SOURCE_INTERFACE]),
+    ],
     [
         ("data_offer", "n", [_OFFER_INTERFACE]),
         ("selection", "?o", [_OFFER_INTERFACE]),
@@ -287,7 +283,7 @@ class _SourceHolder:
     def __init__(self, text: str) -> None:
         self.text = text
         self.proxy: int | None = None
-        self.callbacks: list[ctypes._CFuncPtr] = []
+        self.callbacks: list[Any] = []
         self.listener: ctypes.Array | None = None
 
 
@@ -417,9 +413,7 @@ class _WaylandClipboardThread:
         seat_cb = _SEAT_CAPABILITIES(lambda *_args: None)
         _L.add_listener(seat, [seat_cb])
 
-        device = _L.new_request(
-            manager, _MANAGER_OP_GET_DEVICE, _DEVICE_INTERFACE, [("o", seat)]
-        )
+        device = _L.new_request(manager, _MANAGER_OP_GET_DEVICE, _DEVICE_INTERFACE, [("o", seat)])
         device_cbs = [
             _DEVICE_DATA_OFFER(lambda *_args: None),
             _DEVICE_SELECTION(lambda *_args: None),
@@ -438,9 +432,7 @@ class _WaylandClipboardThread:
             return False
 
         holder = _SourceHolder(text)
-        source = _L.new_request(
-            self._manager, _MANAGER_OP_CREATE_SOURCE, _SOURCE_INTERFACE
-        )
+        source = _L.new_request(self._manager, _MANAGER_OP_CREATE_SOURCE, _SOURCE_INTERFACE)
         holder.proxy = source
 
         def send(_data, _source, _mime, fd):
@@ -470,16 +462,10 @@ class _WaylandClipboardThread:
                 pass
 
         holder.callbacks = [_SOURCE_SEND(send), _SOURCE_CANCELLED(cancelled)]
-        holder.listener = _L.add_listener(
-            source, holder.callbacks, keep_alive=False
-        )
+        holder.listener = _L.add_listener(source, holder.callbacks, keep_alive=False)
         _L.request(source, _SOURCE_OP_OFFER, [("s", _MIME_TEXT)])
 
-        opcode = (
-            _DEVICE_OP_SET_PRIMARY_SELECTION
-            if primary
-            else _DEVICE_OP_SET_SELECTION
-        )
+        opcode = _DEVICE_OP_SET_PRIMARY_SELECTION if primary else _DEVICE_OP_SET_SELECTION
         _L.request(self._device, opcode, [("o", source)])
 
         with self._lock:
@@ -507,6 +493,4 @@ class WaylandClipboard:
         self._backend = _WaylandClipboardThread()
 
     async def copy(self, text: str, *, primary: bool = False) -> bool:
-        return await asyncio.to_thread(
-            self._backend.copy, text, primary, self.timeout
-        )
+        return await asyncio.to_thread(self._backend.copy, text, primary, self.timeout)

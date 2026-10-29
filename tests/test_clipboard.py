@@ -40,9 +40,7 @@ class ClipboardSelectionTests(unittest.TestCase):
         preferred = FakeClipboard([False, False])
         fallback = FakeClipboard()
         cfg = Config(copy_to_clipboard=True, primary_selection=True)
-        ok = asyncio.run(
-            copy_to_clipboard("hello", cfg, preferred, fallback=fallback)
-        )
+        ok = asyncio.run(copy_to_clipboard("hello", cfg, preferred, fallback=fallback))
         self.assertTrue(ok)
         self.assertEqual(preferred.calls, [("hello", False), ("hello", True)])
         self.assertEqual(fallback.calls, [("hello", False), ("hello", True)])
@@ -62,14 +60,18 @@ class InjectorClipboardTests(unittest.TestCase):
         self.assertEqual(preferred.calls, [("hello", False)])
 
     def test_injector_defaults_to_the_native_wayland_provider(self):
-        injector = WtypeInjector(Config())
-        self.assertEqual(type(injector.clipboard).__name__, "WaylandClipboard")
+        class FakeWaylandClipboard(FakeClipboard):
+            pass
+
+        module = mock.Mock()
+        module.WaylandClipboard = FakeWaylandClipboard
+        with mock.patch.dict(sys.modules, {"maic.backends.wayland_clipboard": module}):
+            injector = WtypeInjector(Config())
+        self.assertIsInstance(injector.clipboard, FakeWaylandClipboard)
         self.assertEqual(type(injector.clipboard_fallback).__name__, "SubprocessClipboard")
 
     def test_injector_uses_wl_copy_when_libwayland_is_unavailable(self):
-        with mock.patch.dict(
-            sys.modules, {"maic.backends.wayland_clipboard": None}
-        ):
+        with mock.patch.dict(sys.modules, {"maic.backends.wayland_clipboard": None}):
             injector = WtypeInjector(Config())
         self.assertEqual(type(injector.clipboard).__name__, "SubprocessClipboard")
         self.assertIsNone(injector.clipboard_fallback)

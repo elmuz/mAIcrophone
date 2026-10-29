@@ -61,7 +61,7 @@ def _load_gtk():
     import gi
 
     gi.require_version("Gtk", "4.0")
-    from gi.repository import GLib, Gtk  # noqa: E402
+    from gi.repository import GLib, Gtk
 
     return GLib, Gtk
 
