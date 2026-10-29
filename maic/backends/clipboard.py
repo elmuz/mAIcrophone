@@ -1,8 +1,9 @@
 """Clipboard providers.
 
-The GTK daemon can write the clipboard through ``Gdk.Clipboard`` without
-spawning a helper process. Headless installs and fallback paths use
-``wl-copy``. Both implement :class:`maic.backends.protocols.Clipboard`.
+The bundled daemon uses the native Wayland data-control provider by default.
+``Gdk.Clipboard`` remains available for GTK callers, and ``wl-copy`` covers
+compositors without the native protocol. All implement
+:class:`maic.backends.protocols.Clipboard`.
 """
 
 from __future__ import annotations
@@ -54,7 +55,7 @@ class SubprocessClipboard:
 
 
 class GtkClipboard:
-    """Clipboard provider backed by ``Gdk.Clipboard``.
+    """Optional clipboard provider backed by ``Gdk.Clipboard``.
 
     Gdk calls must run on the GTK main thread. The daemon's session loop lives
     in an asyncio thread, so copy requests are marshalled with
@@ -108,7 +109,11 @@ class GtkClipboard:
                     "text/plain;charset=utf-8",
                     GLib.Bytes.new(text.encode("utf-8")),
                 )
-                clipboard.set(provider)
+                # ``Gdk.Clipboard.set`` is not the content-setter in PyGObject;
+                # it resolves to the generic GObject property helper and is a
+                # silent no-op here. ``set_content`` takes ownership of the
+                # provider and correctly claims both CLIPBOARD and PRIMARY.
+                clipboard.set_content(provider)
                 result["ok"] = True
             except Exception:
                 log.exception("Gdk.Clipboard copy failed")

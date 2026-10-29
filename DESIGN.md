@@ -235,8 +235,9 @@ Decision: stay on Python + GTK4 for now. Re-evaluate under the gates in
 - Unicode/Italian: `wtype` tested OK.
 - Clipboard:
   - optional `copy_to_clipboard` on every successful session,
-  - `Gdk.Clipboard` when the GTK daemon is running,
-  - native Wayland `ext-data-control-v1` client for headless daemons,
+  - native Wayland `ext-data-control-v1` client for both GTK and headless
+    daemons, so regular and PRIMARY selections share one implementation,
+  - `Gdk.Clipboard` remains an optional provider for GTK callers,
   - `wl-copy` only as an optional failure fallback,
   - optional primary-selection mode for middle-click paste,
   - clipboard fallback when injection is impossible.

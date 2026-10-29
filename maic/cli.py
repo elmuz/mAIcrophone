@@ -73,11 +73,13 @@ def _build_overlay(cfg):
     _GLib, Gtk = _load_gtk()
     Gtk.init()
 
-    from .backends.clipboard import GtkClipboard
     from .overlay import Overlay
 
-    # The injector owns the subprocess fallback, so do not nest a second one.
-    return Overlay(cfg), GtkClipboard()
+    # The injector owns the clipboard path. Prefer the native Wayland data
+    # control client over Gdk.Clipboard: it works in both GTK and headless
+    # daemons and avoids GDK main-thread marshalling and Wayland primary
+    # selection quirks.
+    return Overlay(cfg), None
 
 
 def _run_headless_loop(daemon: Daemon) -> None:

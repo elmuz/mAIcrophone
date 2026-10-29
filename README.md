@@ -186,10 +186,11 @@ newest text remains visible. Geometry and typography are configurable under
 
 By default, the final transcript is copied to both the regular clipboard and
 the PRIMARY selection (middle-click paste). Set `primary_selection = false` if
-you do not want that. When the GTK daemon is running, clipboard writes use
-`Gdk.Clipboard`; otherwise the daemon owns the selection itself through a small
-native `ext-data-control-v1` client. If that protocol or the Wayland connection
-is unavailable, `wl-copy` is used as an optional fallback.
+you do not want that. The daemon owns both selections itself through a small
+native `ext-data-control-v1` client, in both GTK and headless modes. If that
+protocol, `libwayland-client`, or the Wayland connection is unavailable,
+`wl-copy` is used as an optional fallback. `Gdk.Clipboard` remains available as
+an optional provider but is not on the default daemon path.
 
 ## Systemd
 
