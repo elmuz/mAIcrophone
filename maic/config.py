@@ -38,17 +38,27 @@ class Config:
     backend_overlay: str = "gtk"
 
     overlay_enabled: bool = True
-    overlay_width_percent: int = 75
-    overlay_max_width_px: int = 2000
+    overlay_width_percent: int = 67
+    overlay_max_width_px: int = 1000
     overlay_max_height_percent: int = 30
     overlay_margin_px: int = 56
     overlay_font: str = "FiraCode Nerd Font Mono 13"
     overlay_max_lines: int = 10
     overlay_min_font_size: int = 11
     overlay_font_steps: int = 3
-    overlay_corner_radius: int = 10
-    overlay_border_width: int = 1
-    overlay_background_opacity: float = 0.94
+    overlay_corner_radius: int = 16
+    overlay_border_width: int = 3
+    overlay_background_opacity: float = 0.93
+    overlay_background_color: str = "#2E3440"
+    overlay_border_color: str = "#4C566A"
+    overlay_text_color: str = "#ECEFF4"
+    overlay_partial_color: str = "#81A1C1"
+    overlay_accent_color: str = "#88C0D0"
+    overlay_divider_color: str = "#3B4252"
+    overlay_success_color: str = "#A3BE8C"
+    overlay_warning_color: str = "#EBCB8B"
+    overlay_error_color: str = "#BF616A"
+    overlay_cancel_color: str = "#D08770"
 
     copy_to_clipboard: bool = True
     primary_selection: bool = True
@@ -83,6 +93,21 @@ def config_path() -> Path:
 def _section(raw: dict, name: str) -> dict:
     value = raw.get(name, {})
     return value if isinstance(value, dict) else {}
+
+
+def _color_value(value, default: str, key: str) -> str:
+    """Validate an overlay color as a CSS hex color."""
+    if value is None:
+        return default
+    text = str(value).strip()
+    if not text:
+        return default
+    digits = text[1:] if text.startswith("#") else ""
+    if len(digits) not in {3, 4, 6, 8} or any(
+        char not in "0123456789abcdefABCDEF" for char in digits
+    ):
+        raise ValueError(f"invalid {key}: {text!r} (expected #RGB, #RGBA, #RRGGBB, or #RRGGBBAA)")
+    return text
 
 
 def load_config(path: Path | None = None) -> Config:
@@ -135,6 +160,37 @@ def load_config(path: Path | None = None) -> Config:
     cfg.overlay_border_width = int(overlay.get("border_width", cfg.overlay_border_width))
     cfg.overlay_background_opacity = float(
         overlay.get("background_opacity", cfg.overlay_background_opacity)
+    )
+    colors = _section(overlay, "colors")
+    cfg.overlay_background_color = _color_value(
+        colors.get("background"), cfg.overlay_background_color, "overlay.colors.background"
+    )
+    cfg.overlay_border_color = _color_value(
+        colors.get("border"), cfg.overlay_border_color, "overlay.colors.border"
+    )
+    cfg.overlay_text_color = _color_value(
+        colors.get("text"), cfg.overlay_text_color, "overlay.colors.text"
+    )
+    cfg.overlay_partial_color = _color_value(
+        colors.get("partial"), cfg.overlay_partial_color, "overlay.colors.partial"
+    )
+    cfg.overlay_accent_color = _color_value(
+        colors.get("accent"), cfg.overlay_accent_color, "overlay.colors.accent"
+    )
+    cfg.overlay_divider_color = _color_value(
+        colors.get("divider"), cfg.overlay_divider_color, "overlay.colors.divider"
+    )
+    cfg.overlay_success_color = _color_value(
+        colors.get("success"), cfg.overlay_success_color, "overlay.colors.success"
+    )
+    cfg.overlay_warning_color = _color_value(
+        colors.get("warning"), cfg.overlay_warning_color, "overlay.colors.warning"
+    )
+    cfg.overlay_error_color = _color_value(
+        colors.get("error"), cfg.overlay_error_color, "overlay.colors.error"
+    )
+    cfg.overlay_cancel_color = _color_value(
+        colors.get("cancel"), cfg.overlay_cancel_color, "overlay.colors.cancel"
     )
 
     cfg.copy_to_clipboard = bool(injection.get("copy_to_clipboard", cfg.copy_to_clipboard))

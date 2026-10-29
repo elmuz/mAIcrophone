@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+from collections import deque
 from html import escape
 
 import cairo
@@ -15,23 +16,10 @@ from .config import Config  # noqa: E402
 from .niri import OutputInfo  # noqa: E402
 from .overlay_null import NullOverlay  # noqa: E402,F401
 
-NORD_BG = "#2E3440"
-NORD_BORDER = "#4C566A"
-NORD_TEXT = "#ECEFF4"
-NORD_MUTED = "#D8DEE9"
-NORD_ACCENT = "#88C0D0"
-NORD_GREEN = "#A3BE8C"
-NORD_YELLOW = "#EBCB8B"
-NORD_ORANGE = "#D08770"
-NORD_RED = "#BF616A"
-
-STATE_COLORS = {
-    "REC": NORD_GREEN,
-    "STOP": NORD_YELLOW,
-    "COMMIT": NORD_ACCENT,
-    "TYPE": NORD_ACCENT,
-    "CANCEL": NORD_ORANGE,
-    "ERR": NORD_RED,
+SERVER_LABELS = {
+    "online": "live",
+    "offline": "offline",
+    "checking": "checking",
 }
 
 
@@ -55,39 +43,19 @@ def meter_level(value: float) -> float:
     return min(1.0, max(0.0, (dbfs + 60.0) / 60.0))
 
 
-def vu_bar(value: float, width: int = 14) -> str:
-    level = meter_level(value)
-    if level <= 0:
-        return " " * width
-    filled = round(level * width)
-    return "█" * filled + " " * (width - filled)
-
-
-def vu_bar_markup(value: float, width: int = 14) -> str:
-    level = meter_level(value)
-    if level <= 0:
-        return " " * width
-    filled = round(level * width)
-    green_end = int(width * 0.65)
-    yellow_end = int(width * 0.85)
-    chars = []
-    for i in range(width):
-        if i >= filled:
-            chars.append(" ")
-        elif i < green_end:
-            chars.append(f'<span foreground="{NORD_GREEN}">█</span>')
-        elif i < yellow_end:
-            chars.append(f'<span foreground="{NORD_YELLOW}">█</span>')
-        else:
-            chars.append(f'<span foreground="{NORD_RED}">█</span>')
-    return "".join(chars)
-
-
 def language_label(code: str) -> str:
     code = (code or "auto").strip()
     if code.lower() == "auto":
         return "AUTO"
-    return code.split("-")[0].upper()
+    return code.upper()
+
+
+def _hex_rgb(color: str) -> tuple[int, int, int]:
+    digits = color.lstrip("#")
+    if len(digits) in {3, 4}:
+        digits = "".join(char * 2 for char in digits[:3])
+    digits = digits[:6]
+    return int(digits[0:2], 16), int(digits[2:4], 16), int(digits[4:6], 16)
 
 
 def _font_parts(font: str) -> tuple[str, int]:
@@ -111,7 +79,13 @@ class Overlay:
         self.cfg = cfg
         self.layer_shell = _load_layer_shell()
         self.window: Gtk.Window | None = None
-        self.status: Gtk.Label | None = None
+        self.status_dot: Gtk.DrawingArea | None = None
+        self.status_label: Gtk.Label | None = None
+        self.waveform: Gtk.DrawingArea | None = None
+        self.language_pill: Gtk.Box | None = None
+        self.language_label: Gtk.Label | None = None
+        self.server_dot: Gtk.Label | None = None
+        self.server_label: Gtk.Label | None = None
         self.text: Gtk.Label | None = None
         self.scroll: Gtk.ScrolledWindow | None = None
         self.width = 800
@@ -122,6 +96,12 @@ class Overlay:
         self._scroll_source: int | None = None
         self._last_text = ""
         self._last_rms = 0.0
+        self._text_final = False
+        self._stable_prefix = ""
+        self._previous_partial = ""
+        self._levels: deque[float] = deque([0.0] * 15, maxlen=15)
+        self._wave_current = [0.0] * 15
+        self._wave_source: int | None = None
         self._state = "idle"
         self.language = language_label(cfg.language)
         self.server_status = "checking"
@@ -129,11 +109,21 @@ class Overlay:
         self._font_steps = _font_steps(
             self._font_base, cfg.overlay_min_font_size, cfg.overlay_font_steps
         )
+        self.color_background = cfg.overlay_background_color
+        self.color_border = cfg.overlay_border_color
+        self.color_text = cfg.overlay_text_color
+        self.color_partial = cfg.overlay_partial_color
+        self.color_accent = cfg.overlay_accent_color
+        self.color_divider = cfg.overlay_divider_color
+        self.color_success = cfg.overlay_success_color
+        self.color_warning = cfg.overlay_warning_color
+        self.color_error = cfg.overlay_error_color
+        self.color_cancel = cfg.overlay_cancel_color
         self._build()
 
     def _build_css(self) -> bytes:
         family = self._font_family.replace('"', '\\"')
-        status_size = max(9, self._font_base - 3)
+        small_size = max(9, self._font_base - 4)
         step_rules = "\n".join(
             f".maic-text.font-step-{i} {{ font-size: {size}pt; }}"
             for i, size in enumerate(self._font_steps[1:], start=1)
@@ -141,30 +131,58 @@ class Overlay:
         opacity = self.cfg.overlay_background_opacity
         radius = self.cfg.overlay_corner_radius
         border = self.cfg.overlay_border_width
+        bg_red, bg_green, bg_blue = _hex_rgb(self.color_background)
         return f"""
-window.maic-overlay {{
+window.maic-overlay,
+window.maic-overlay.background,
+window.maic-overlay.csd,
+window.maic-overlay:backdrop,
+window.maic-overlay.csd:backdrop {{
+    background: none;
     background-color: transparent;
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
 }}
 .maic-box {{
-    background-color: rgba(46, 52, 64, {opacity});
-    border: {border}px solid {NORD_BORDER};
+    background-color: rgba({bg_red}, {bg_green}, {bg_blue}, {opacity});
+    border: {border}px solid {self.color_border};
     border-radius: {radius}px;
+    box-shadow: none;
 }}
-.maic-status {{
+.maic-state, .maic-dot {{
     font-family: "{family}";
-    font-size: {status_size}pt;
-    color: {NORD_MUTED};
+    font-size: {small_size}pt;
+    font-weight: 700;
+}}
+.maic-pill {{
+    background-color: transparent;
+    border: 1px solid {self.color_border};
+    border-radius: 18px;
+}}
+.maic-pill-label {{
+    font-family: "{family}";
+    font-size: {small_size}pt;
+    color: {self.color_accent};
+}}
+.maic-server {{
+    font-family: "{family}";
+    font-size: {small_size}pt;
+}}
+.maic-divider {{
+    background-color: {self.color_divider};
+    min-height: 1px;
 }}
 .maic-text {{
     font-family: "{family}";
     font-size: {self._font_base}pt;
-    color: {NORD_TEXT};
+    color: {self.color_text};
 }}
 {step_rules}
 .maic-error {{
     font-family: "{family}";
     font-size: {max(self._font_base - 2, self.cfg.overlay_min_font_size)}pt;
-    color: {NORD_RED};
+    color: {self.color_error};
 }}
 scrolledwindow {{
     background: transparent;
@@ -178,7 +196,10 @@ scrollbar {{
 
     def _build(self) -> None:
         self.window = Gtk.Window()
-        self.window.add_css_class("maic-overlay")
+        # Replace the theme's automatic window classes (background/csd). They
+        # paint a rectangular surface behind the rounded box, which shows up as
+        # opaque corners on a layer-shell overlay.
+        self.window.set_css_classes(["maic-overlay"])
         self.window.set_decorated(False)
         self.window.set_resizable(False)
         self.window.set_can_focus(False)
@@ -187,13 +208,65 @@ scrollbar {{
 
         outer = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
         outer.add_css_class("maic-box")
-        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
-        box.set_margin_start(20)
-        box.set_margin_end(20)
-        box.set_margin_top(12)
-        box.set_margin_bottom(18)
-        self.status = Gtk.Label(xalign=0)
-        self.status.add_css_class("maic-status")
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
+
+        header = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
+        header.set_margin_start(22)
+        header.set_margin_end(22)
+        header.set_margin_top(14)
+        header.set_margin_bottom(12)
+
+        status_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=7)
+        status_box.set_valign(Gtk.Align.CENTER)
+        self.status_dot = Gtk.DrawingArea()
+        self.status_dot.set_content_width(20)
+        self.status_dot.set_content_height(20)
+        self.status_dot.set_valign(Gtk.Align.CENTER)
+        self.status_dot.set_draw_func(self._draw_status_dot)
+        self.status_label = Gtk.Label(xalign=0)
+        self.status_label.add_css_class("maic-state")
+        status_box.append(self.status_dot)
+        status_box.append(self.status_label)
+        header.append(status_box)
+
+        self.waveform = Gtk.DrawingArea()
+        self.waveform.set_content_width(154)
+        self.waveform.set_content_height(36)
+        self.waveform.set_hexpand(True)
+        self.waveform.set_halign(Gtk.Align.CENTER)
+        self.waveform.set_valign(Gtk.Align.CENTER)
+        self.waveform.set_draw_func(self._draw_waveform)
+        header.append(self.waveform)
+
+        right = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=14)
+        right.set_valign(Gtk.Align.CENTER)
+        self.language_pill = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
+        self.language_pill.add_css_class("maic-pill")
+        self.language_pill.set_valign(Gtk.Align.CENTER)
+        self.language_label = Gtk.Label()
+        self.language_label.add_css_class("maic-pill-label")
+        self.language_label.set_margin_start(16)
+        self.language_label.set_margin_end(16)
+        self.language_label.set_margin_top(5)
+        self.language_label.set_margin_bottom(5)
+        self.language_pill.append(self.language_label)
+        server_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
+        server_box.set_valign(Gtk.Align.CENTER)
+        self.server_dot = Gtk.Label()
+        self.server_dot.add_css_class("maic-dot")
+        self.server_label = Gtk.Label(xalign=0)
+        self.server_label.add_css_class("maic-server")
+        server_box.append(self.server_dot)
+        server_box.append(self.server_label)
+        right.append(self.language_pill)
+        right.append(server_box)
+        header.append(right)
+
+        footer = Gtk.Separator(orientation=Gtk.Orientation.HORIZONTAL)
+        footer.add_css_class("maic-divider")
+        footer.set_margin_start(22)
+        footer.set_margin_end(22)
+
         self.text = Gtk.Label(xalign=0)
         self.text.add_css_class("maic-text")
         self.text.set_wrap(True)
@@ -207,11 +280,16 @@ scrollbar {{
         self.scroll.set_overlay_scrolling(True)
         self.scroll.set_propagate_natural_height(False)
         self.scroll.set_hexpand(True)
+        self.scroll.set_margin_start(22)
+        self.scroll.set_margin_end(22)
+        self.scroll.set_margin_top(14)
+        self.scroll.set_margin_bottom(16)
         self.scroll.set_child(self.text)
         adjustment = self.scroll.get_vadjustment()
         adjustment.connect("changed", self._on_adjustment_changed)
 
-        box.append(self.status)
+        box.append(header)
+        box.append(footer)
         box.append(self.scroll)
         outer.append(box)
         self.window.set_child(outer)
@@ -287,13 +365,26 @@ scrollbar {{
             self.text.add_css_class(f"font-step-{step}")
 
         line_height = self._line_height(font_size)
-        chrome_height = 56
+        chrome_height = 96
         available_lines = max(1, (self.max_height - chrome_height) // line_height)
         visible_lines = max(1, min(lines, self.cfg.overlay_max_lines, available_lines))
         text_height = visible_lines * line_height
         total_height = min(self.max_height, chrome_height + text_height)
 
-        self.text.set_text(text)
+        if self._text_final:
+            markup = f'<span foreground="{self.color_text}">{escape(text)}</span>' if text else ""
+        else:
+            stable = self._stable_prefix_for(text)
+            if stable and text.startswith(stable):
+                rest = text[len(stable) :]
+                markup = (
+                    f'<span foreground="{self.color_text}">{escape(stable)}</span>'
+                    f'<span foreground="{self.color_partial}">{escape(rest)}</span>'
+                )
+            else:
+                markup = f'<span foreground="{self.color_partial}">{escape(text)}</span>'
+            markup += f'<span foreground="{self.color_accent}">▌</span>'
+        self.text.set_markup(markup)
         self.text.set_size_request(self.content_width, -1)
         self.scroll.set_min_content_height(-1)
         self.scroll.set_max_content_height(-1)
@@ -324,37 +415,116 @@ scrollbar {{
             self._on_adjustment_changed(adjustment)
         return GLib.SOURCE_REMOVE
 
-    def _status_markup(self, state: str, rms: float) -> str:
-        state_color = STATE_COLORS.get(state, NORD_MUTED)
-        if self.server_status == "online":
-            server_color = NORD_GREEN
-        elif self.server_status == "offline":
-            server_color = NORD_RED
-        else:
-            server_color = NORD_YELLOW
-        rec_dot = f'<span foreground="{NORD_RED}">●</span> ' if state == "REC" else ""
-        return (
-            f"{rec_dot}"
-            f'<span foreground="{state_color}" weight="bold">'
-            f"{escape(state.ljust(6))}</span>"
-            f" {vu_bar_markup(rms)}  "
-            f'<span foreground="{NORD_ACCENT}">{escape(self.language)}</span>  '
-            f'<span foreground="{server_color}">●</span> '
-            f'<span foreground="{server_color}">{escape(self.server_status)}</span>'
-        )
+    def _stable_prefix_for(self, text: str) -> str:
+        limit = min(len(self._previous_partial), len(text))
+        common = 0
+        while common < limit and self._previous_partial[common] == text[common]:
+            common += 1
+        self._previous_partial = text
+        candidate = text[:common]
+        boundary = max(candidate.rfind(" "), candidate.rfind("\n"), candidate.rfind("\t"))
+        candidate = candidate[: boundary + 1] if boundary >= 0 else ""
+        # Keep the last word provisional even when the ASR repeats a partial.
+        if candidate and candidate == text:
+            trimmed = candidate.rstrip()
+            boundary = max(trimmed.rfind(" "), trimmed.rfind("\n"), trimmed.rfind("\t"))
+            candidate = candidate[: boundary + 1] if boundary >= 0 else ""
+        self._stable_prefix = candidate
+        return candidate
+
+    def _state_color(self, state: str) -> str:
+        if state in {"REC", "ERR"}:
+            return self.color_error
+        if state in {"STOP", "CHECK"}:
+            return self.color_warning
+        if state == "CANCEL":
+            return self.color_cancel
+        return self.color_accent
+
+    def _server_color(self, status: str) -> str:
+        if status == "online":
+            return self.color_success
+        if status == "offline":
+            return self.color_error
+        return self.color_warning
+
+    def _draw_status_dot(self, area, cr, width: int, height: int) -> None:
+        rgba = Gdk.RGBA()
+        if not rgba.parse(self._state_color(self._state)):
+            rgba.parse(self.color_text)
+        cx, cy = width / 2, height / 2
+        cr.set_source_rgba(rgba.red, rgba.green, rgba.blue, 0.22)
+        cr.arc(cx, cy, 8, 0, 2 * math.pi)
+        cr.fill()
+        cr.set_source_rgba(rgba.red, rgba.green, rgba.blue, 1.0)
+        cr.arc(cx, cy, 4.5, 0, 2 * math.pi)
+        cr.fill()
+
+    def _animate_waveform(self) -> bool:
+        if not self.window or not self.window.get_visible():
+            self._wave_source = None
+            return GLib.SOURCE_REMOVE
+        for i, target in enumerate(self._levels):
+            current = self._wave_current[i]
+            delta = target - current
+            self._wave_current[i] = target if abs(delta) < 0.005 else current + delta * 0.45
+        if self.waveform is not None:
+            self.waveform.queue_draw()
+        return GLib.SOURCE_CONTINUE
+
+    def _draw_waveform(self, area, cr, width: int, height: int) -> None:
+        bars = len(self._wave_current)
+        bar_width = 4
+        gap = 6
+        total_width = bars * bar_width + (bars - 1) * gap
+        x = (width - total_width) / 2
+        mid = height / 2
+        red, green, blue = _hex_rgb(self.color_accent)
+        cr.set_source_rgba(red / 255, green / 255, blue / 255, 0.95)
+        for level in self._wave_current:
+            bar_height = 5 + level * 31
+            y = mid - bar_height / 2
+            radius = min(2.0, bar_width / 2, bar_height / 2)
+            cr.new_sub_path()
+            cr.arc(x + bar_width - radius, y + radius, radius, -math.pi / 2, 0)
+            cr.arc(x + bar_width - radius, y + bar_height - radius, radius, 0, math.pi / 2)
+            cr.arc(x + radius, y + bar_height - radius, radius, math.pi / 2, math.pi)
+            cr.arc(x + radius, y + radius, radius, math.pi, 3 * math.pi / 2)
+            cr.close_path()
+            cr.fill()
+            x += bar_width + gap
 
     def _refresh_status(self) -> None:
-        if self.status is not None:
-            self.status.set_markup(self._status_markup(self._state, self._last_rms))
+        state_color = self._state_color(self._state)
+        if self.status_dot is not None:
+            self.status_dot.queue_draw()
+        if self.status_label is not None:
+            self.status_label.set_markup(
+                f'<span foreground="{state_color}">{escape(self._state)}</span>'
+            )
+        if self.language_label is not None:
+            self.language_label.set_markup(
+                f'<span foreground="{self.color_accent}">{escape(self.language)}</span>'
+            )
+        server_color = self._server_color(self.server_status)
+        server_text = SERVER_LABELS.get(self.server_status, self.server_status)
+        if self.server_dot is not None:
+            self.server_dot.set_markup(f'<span foreground="{server_color}">●</span>')
+        if self.server_label is not None:
+            self.server_label.set_markup(
+                f'<span foreground="{server_color}">{escape(server_text)}</span>'
+            )
+        if self.waveform is not None:
+            self.waveform.queue_draw()
 
     def _start_ui(self, output: OutputInfo, state: str) -> bool:
-        assert self.window is not None and self.status is not None
+        assert self.window is not None
         self.output = output
         self.width = min(
             self.cfg.overlay_max_width_px,
             max(320, int(output.width * self.cfg.overlay_width_percent / 100)),
         )
-        self.content_width = self.width - 40
+        self.content_width = self.width - 44
         self.max_height = max(120, int(output.height * self.cfg.overlay_max_height_percent / 100))
         monitor = self._find_monitor(output.name)
         if monitor is not None:
@@ -370,6 +540,13 @@ scrollbar {{
         self._state = state
         self._last_text = ""
         self._last_rms = 0.0
+        self._text_final = False
+        self._stable_prefix = ""
+        self._previous_partial = ""
+        self._levels = deque([0.0] * 15, maxlen=15)
+        self._wave_current = [0.0] * 15
+        if self._wave_source is None:
+            self._wave_source = GLib.timeout_add(16, self._animate_waveform)
         self._refresh_status()
         self._apply_text("")
         self.window.set_visible(True)
@@ -382,9 +559,20 @@ scrollbar {{
         self._last_text = text
         GLib.idle_add(self._update_text, text)
 
+    def set_final(self, text: str) -> None:
+        self._last_text = text
+        GLib.idle_add(self._update_final, text)
+
     def _update_text(self, text: str) -> bool:
         if not self.window or not self.window.get_visible():
             return False
+        self._apply_text(text)
+        return False
+
+    def _update_final(self, text: str) -> bool:
+        if not self.window or not self.window.get_visible():
+            return False
+        self._text_final = True
         self._apply_text(text)
         return False
 
@@ -392,10 +580,25 @@ scrollbar {{
         self._last_rms = rms
         GLib.idle_add(self._update_level, rms)
 
+    def set_levels(self, levels: list[float], interval_ms: int = 25) -> None:
+        """Feed several meter samples spread over one audio chunk."""
+        if levels:
+            GLib.idle_add(self._schedule_levels, list(levels), max(1, interval_ms))
+
+    def _schedule_levels(self, levels: list[float], interval_ms: int) -> bool:
+        for offset, level in enumerate(levels):
+            GLib.timeout_add(offset * interval_ms, self._push_level, level)
+        return False
+
+    def _push_level(self, rms: float) -> bool:
+        if self.window and self.window.get_visible():
+            self._levels.append(meter_level(rms))
+        return GLib.SOURCE_REMOVE
+
     def _update_level(self, rms: float) -> bool:
-        if not self.window or not self.window.get_visible() or self.status is None:
+        if not self.window or not self.window.get_visible():
             return False
-        self.status.set_markup(self._status_markup(self._state, rms))
+        self._levels.append(meter_level(rms))
         return False
 
     def set_state(self, state: str) -> None:
@@ -403,8 +606,8 @@ scrollbar {{
         GLib.idle_add(self._update_state, state)
 
     def _update_state(self, state: str) -> bool:
-        if self.status is not None:
-            self.status.set_markup(self._status_markup(state, self._last_rms))
+        self._state = state
+        self._refresh_status()
         return False
 
     def set_language(self, code: str) -> None:
@@ -427,13 +630,14 @@ scrollbar {{
         GLib.idle_add(self._show_error_ui, message, timeout_ms)
 
     def _show_error_ui(self, message: str, timeout_ms: int) -> bool:
-        if not self.window or not self.status or not self.text:
+        if not self.window or not self.text:
             return False
-        self.status.set_markup(self._status_markup("ERR", self._last_rms))
-        self.text.set_text(message)
+        self._state = "ERR"
+        self._refresh_status()
+        self.text.set_markup(f'<span foreground="{self.color_error}">{escape(message)}</span>')
         self.text.add_css_class("maic-error")
-        self.window.set_size_request(self.width, 100)
-        self.window.set_default_size(self.width, 100)
+        self.window.set_size_request(self.width, 110)
+        self.window.set_default_size(self.width, 110)
         self.window.set_visible(True)
         if self._hide_source is not None:
             GLib.source_remove(self._hide_source)
@@ -451,6 +655,9 @@ scrollbar {{
         GLib.idle_add(self._hide_ui)
 
     def _hide_ui(self) -> bool:
+        if self._wave_source is not None:
+            GLib.source_remove(self._wave_source)
+            self._wave_source = None
         if self.window is not None:
             self.window.set_visible(False)
         return False
@@ -459,6 +666,9 @@ scrollbar {{
         GLib.idle_add(self._destroy_ui)
 
     def _destroy_ui(self) -> bool:
+        if self._wave_source is not None:
+            GLib.source_remove(self._wave_source)
+            self._wave_source = None
         if self.window is not None:
             self.window.destroy()
             self.window = None

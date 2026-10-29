@@ -66,17 +66,29 @@ punctuation = true
 
 [overlay]
 enabled = true
-width_percent = 75
-max_width_px = 2000
+width_percent = 67
+max_width_px = 1000
 max_height_percent = 30
 margin_px = 56
 font = "FiraCode Nerd Font Mono 13"
 max_lines = 10
 min_font_size = 11
 font_steps = 3
-corner_radius = 10
-border_width = 1
-background_opacity = 0.94
+corner_radius = 16
+border_width = 3
+background_opacity = 0.93
+
+[overlay.colors]
+background = "#2E3440"
+border = "#4C566A"
+text = "#ECEFF4"
+partial = "#81A1C1"
+accent = "#88C0D0"
+divider = "#3B4252"
+success = "#A3BE8C"
+warning = "#EBCB8B"
+error = "#BF616A"
+cancel = "#D08770"
 
 [injection]
 copy_to_clipboard = true
@@ -184,6 +196,31 @@ and grows upward up to `max_height_percent` of the monitor. It shows state, a
 coloured VU meter, language, server status, and the evolving transcript. See
 [architecture.md](architecture.md#7-overlay) for the layout and long-text
 policy.
+
+Overlay colors live in the optional `[overlay.colors]` table. Values must be
+CSS hex colors (`#RGB`, `#RGBA`, `#RRGGBB`, or `#RRGGBBAA`).
+
+| Key | Default | Used for |
+| --- | --- | --- |
+| `background` | `#2E3440` | Window background, combined with `background_opacity`. |
+| `border` | `#4C566A` | Window and language-pill border. |
+| `text` | `#ECEFF4` | Stable/final transcript text. |
+| `partial` | `#81A1C1` | Live, still-changing transcript text. |
+| `accent` | `#88C0D0` | Waveform, caret, and language label. |
+| `divider` | `#3B4252` | Header divider line. |
+| `success` | `#A3BE8C` | Online server indicator. |
+| `warning` | `#EBCB8B` | Stopping/checking states. |
+| `error` | `#BF616A` | Recording indicator and errors. |
+| `cancel` | `#D08770` | Cancelling state. |
+
+Any omitted color keeps its default, so a minimal custom theme can be just:
+
+```toml
+[overlay.colors]
+border = "#7c6f64"
+background = "#1d2021"
+accent = "#d79921"
+```
 
 ## Languages and ITN
 

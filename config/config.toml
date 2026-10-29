@@ -37,17 +37,30 @@ punctuation = true
 
 [overlay]
 enabled = true
-width_percent = 75
-max_width_px = 2000
+width_percent = 67
+max_width_px = 1000
 max_height_percent = 30
 margin_px = 56
 font = "FiraCode Nerd Font Mono 13"
 max_lines = 10
 min_font_size = 11
 font_steps = 3
-corner_radius = 10
-border_width = 1
-background_opacity = 0.94
+corner_radius = 16
+border_width = 3
+background_opacity = 0.93
+
+[overlay.colors]
+# CSS hex colors: #RGB, #RGBA, #RRGGBB, or #RRGGBBAA.
+background = "#2E3440"   # overlay background (combined with background_opacity)
+border = "#4C566A"       # window border
+# text = "#ECEFF4"       # stable/final transcript
+# partial = "#81A1C1"    # live partial transcript
+# accent = "#88C0D0"     # waveform, caret, language pill
+# divider = "#3B4252"    # header divider
+# success = "#A3BE8C"    # server online
+# warning = "#EBCB8B"    # stopping / checking
+# error = "#BF616A"      # recording indicator and errors
+# cancel = "#D08770"     # cancelling state
 
 [injection]
 # wtype | clipboard | both (copy_to_clipboard controls the clipboard side)

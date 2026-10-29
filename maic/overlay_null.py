@@ -14,7 +14,13 @@ class NullOverlay:
     def set_partial(self, text):
         pass
 
+    def set_final(self, text):
+        pass
+
     def set_level(self, rms):
+        pass
+
+    def set_levels(self, levels, interval_ms=25):
         pass
 
     def set_state(self, state):

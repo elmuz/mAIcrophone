@@ -467,12 +467,27 @@ class Daemon:
             if self.backends.asr.capabilities.supports_partials:
                 self.overlay.set_partial(event.text)
         elif event.kind == "final":
-            self.overlay.set_partial(event.text)
+            set_final = getattr(self.overlay, "set_final", None)
+            if callable(set_final):
+                set_final(event.text)
+            else:
+                # Backwards compatibility with overlay implementations that
+                # predate the final/partial distinction.
+                self.overlay.set_partial(event.text)
         elif event.kind == "committed":
             session.committed_event.set()
         elif event.kind == "error":
             session.error_message = event.text
             session.error_event.set()
+
+    @staticmethod
+    def _meter_levels(audio: AudioCapture, data: bytes, count: int = 4) -> list[float]:
+        """Split one ASR chunk into finer meter samples for a lively waveform."""
+        if len(data) < 2:
+            return []
+        # Keep every slice on an s16 sample boundary.
+        step = max(2, (len(data) // count // 2) * 2)
+        return [audio.level(data[i : i + step]) for i in range(0, len(data), step)]
 
     async def _audio_loop(self, audio: AudioCapture, asr: AsrSession, session: Session) -> None:
         try:
@@ -480,7 +495,13 @@ class Daemon:
                 data = await audio.read_chunk()
                 if not data:
                     break
-                self.overlay.set_level(audio.level(data))
+                levels = self._meter_levels(audio, data)
+                set_levels = getattr(self.overlay, "set_levels", None)
+                if callable(set_levels) and levels:
+                    interval = max(5, self.cfg.chunk_ms // len(levels))
+                    set_levels(levels, interval)
+                else:
+                    self.overlay.set_level(max(levels) if levels else 0.0)
                 await asr.send_audio(data)
         except asyncio.CancelledError:
             raise

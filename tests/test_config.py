@@ -56,6 +56,42 @@ multiline = "shift-enter"
         self.assertEqual(cfg.multiline, "shift-enter")
         self.assertEqual(cfg.replacements, {"Pipewire": "PipeWire"})
 
+    def test_overlay_colors_are_loaded(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "config.toml"
+            path.write_text(
+                """
+[overlay.colors]
+background = "#1d2021"
+border = "#7c6f64"
+text = "#ebdbb2"
+partial = "#a89984"
+accent = "#d79921"
+divider = "#3c3836"
+success = "#b8bb26"
+warning = "#fabd2f"
+error = "#fb4934"
+cancel = "#fe8019"
+""",
+                encoding="utf-8",
+            )
+            cfg = load_config(path)
+
+        self.assertEqual(cfg.overlay_background_color, "#1d2021")
+        self.assertEqual(cfg.overlay_border_color, "#7c6f64")
+        self.assertEqual(cfg.overlay_text_color, "#ebdbb2")
+        self.assertEqual(cfg.overlay_accent_color, "#d79921")
+
+    def test_invalid_overlay_color_rejected(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "config.toml"
+            path.write_text(
+                '[overlay.colors]\nborder = "not-a-color"\n',
+                encoding="utf-8",
+            )
+            with self.assertRaises(ValueError):
+                load_config(path)
+
     def test_invalid_multiline_rejected(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "config.toml"
