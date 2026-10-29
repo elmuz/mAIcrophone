@@ -31,22 +31,22 @@ mistaken for a suffix. Revisit if the server exposes fuller partial events.
 
 ## Step 2 — backend seams
 
-Status: **next**.
+Status: **done**.
 
-- [ ] Define protocols/ABCs for:
+- [x] Define protocols/ABCs for:
       - compositor: focused window/output, window existence, refocus;
       - audio capture: start/read/stop/level;
       - injection: type text, clipboard/primary selection;
       - ASR session: connect/send/commit/cancel/close plus capabilities;
       - overlay: the existing `Overlay`/`NullOverlay` surface.
-- [ ] Move the current implementations under `maic/backends/`: Niri,
+- [x] Move the current implementations under `maic/backends/`: Niri,
       `pw-record`, `wtype`/`wl-copy`, nemo-speech. Existing modules may remain
       as thin provider modules at first.
-- [ ] Add explicit capabilities (`can_refocus`, `supports_unicode`,
+- [x] Add explicit capabilities (`can_refocus`, `supports_unicode`,
       `supports_streaming`, `supports_partials`, `supports_commit`, languages,
       punctuation, ITN).
-- [ ] Select providers in config (`[backend]` or equivalent) with validation.
-- [ ] Keep `daemon.py` depending only on the protocols, not concrete modules.
+- [x] Select providers in config (`[backend]` or equivalent) with validation.
+- [x] Keep `daemon.py` depending only on the protocols, not concrete modules.
 
 Acceptance: the daemon can be constructed with fake providers in tests, and no
 Niri/`pw-record`/`wtype`/nemo-specific logic remains in the session loop.
@@ -56,7 +56,7 @@ tests and the current provider passes through it.
 
 ## Step 3 — ASR abstraction
 
-Status: backlog.
+Status: **next**.
 
 - [ ] Formalize `AsrSession` events: `partial`, `final`, `committed`, `error`.
 - [ ] Move readiness/health probing into the engine provider.

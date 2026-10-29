@@ -11,6 +11,7 @@ import threading
 from pathlib import Path
 
 from . import __version__
+from .backends import build_backends
 from .config import load_config
 from .daemon import Daemon, socket_path
 from .overlay_null import NullOverlay
@@ -84,7 +85,7 @@ def _load_gtk():
 
 
 def _build_overlay(cfg):
-    if not cfg.overlay_enabled:
+    if not cfg.overlay_enabled or cfg.backend_overlay == "null":
         return NullOverlay()
 
     # Re-exec before importing gi/Gtk so gtk4-layer-shell is preloaded.
@@ -144,7 +145,14 @@ def _run_daemon(args: argparse.Namespace) -> int:
         print(f"maic: {exc}", file=sys.stderr)
         return 1
 
-    daemon = Daemon(cfg, overlay)
+    try:
+        backends = build_backends(cfg)
+    except Exception as exc:
+        print(f"maic: {exc}", file=sys.stderr)
+        overlay.destroy()
+        return 1
+
+    daemon = Daemon(cfg, backends, overlay)
     try:
         daemon.start()
     except Exception as exc:

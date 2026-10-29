@@ -123,6 +123,11 @@ The daemon connects to the server URL from config. It checks `/ready` before
 starting a recording, so an offline server fails immediately instead of after
 you finish speaking.
 
+Concrete implementations live under `maic/backends/`. The `[backend]` section
+selects the compositor, audio, injection, ASR, and overlay providers; current
+names are `niri`, `pw-record`, `wtype`, `nemo-speech`, and `gtk`/`null`. Unknown
+names are rejected when the config is loaded.
+
 The default language is `en-US`. Language is a per-session setting: changing it
 with `maic language` affects the next dictation without restarting the ASR
 server. The overlay shows `EN`, `IT`, or `AUTO` in its status row.

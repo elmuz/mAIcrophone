@@ -4,6 +4,14 @@ url = "ws://127.0.0.1:8080/v1/audio/transcriptions/realtime"
 # How often the daemon refreshes the overlay server indicator.
 poll_seconds = 5
 
+[backend]
+# Current providers. Unknown names fail config validation at daemon startup.
+compositor = "niri"
+audio = "pw-record"
+injection = "wtype"
+asr = "nemo-speech"
+overlay = "gtk"             # gtk | null
+
 [audio]
 # Empty = PipeWire default source. Otherwise a source name from `wpctl status`.
 source = ""

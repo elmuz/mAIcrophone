@@ -5,6 +5,14 @@ import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from .backends.protocols import (
+    ASR_PROVIDERS,
+    AUDIO_PROVIDERS,
+    COMPOSITOR_PROVIDERS,
+    INJECTION_PROVIDERS,
+    OVERLAY_PROVIDERS,
+)
+
 
 @dataclass
 class Config:
@@ -15,6 +23,12 @@ class Config:
     audio_source: str = ""
     sample_rate: int = 16000
     chunk_ms: int = 100
+
+    backend_compositor: str = "niri"
+    backend_audio: str = "pw-record"
+    backend_injection: str = "wtype"
+    backend_asr: str = "nemo-speech"
+    backend_overlay: str = "gtk"
 
     overlay_enabled: bool = True
     overlay_width_percent: int = 75
@@ -74,6 +88,7 @@ def load_config(path: Path | None = None) -> Config:
         raw = {}
 
     server = _section(raw, "server")
+    backend = _section(raw, "backend")
     audio = _section(raw, "audio")
     asr = _section(raw, "asr")
     overlay = _section(raw, "overlay")
@@ -88,6 +103,16 @@ def load_config(path: Path | None = None) -> Config:
     cfg.audio_source = str(audio.get("source", cfg.audio_source))
     cfg.sample_rate = int(audio.get("sample_rate", cfg.sample_rate))
     cfg.chunk_ms = int(audio.get("chunk_ms", cfg.chunk_ms))
+
+    cfg.backend_compositor = str(
+        backend.get("compositor", cfg.backend_compositor)
+    )
+    cfg.backend_audio = str(backend.get("audio", cfg.backend_audio))
+    cfg.backend_injection = str(
+        backend.get("injection", cfg.backend_injection)
+    )
+    cfg.backend_asr = str(backend.get("asr", cfg.backend_asr))
+    cfg.backend_overlay = str(backend.get("overlay", cfg.backend_overlay))
 
     cfg.overlay_enabled = bool(overlay.get("enabled", cfg.overlay_enabled))
     cfg.overlay_width_percent = int(
@@ -144,6 +169,31 @@ def load_config(path: Path | None = None) -> Config:
     if env_lang:
         cfg.language = env_lang
 
+    if cfg.backend_compositor not in COMPOSITOR_PROVIDERS:
+        raise ValueError(
+            f"invalid backend.compositor: {cfg.backend_compositor!r} "
+            f"(choose from {', '.join(COMPOSITOR_PROVIDERS)})"
+        )
+    if cfg.backend_audio not in AUDIO_PROVIDERS:
+        raise ValueError(
+            f"invalid backend.audio: {cfg.backend_audio!r} "
+            f"(choose from {', '.join(AUDIO_PROVIDERS)})"
+        )
+    if cfg.backend_injection not in INJECTION_PROVIDERS:
+        raise ValueError(
+            f"invalid backend.injection: {cfg.backend_injection!r} "
+            f"(choose from {', '.join(INJECTION_PROVIDERS)})"
+        )
+    if cfg.backend_asr not in ASR_PROVIDERS:
+        raise ValueError(
+            f"invalid backend.asr: {cfg.backend_asr!r} "
+            f"(choose from {', '.join(ASR_PROVIDERS)})"
+        )
+    if cfg.backend_overlay not in OVERLAY_PROVIDERS:
+        raise ValueError(
+            f"invalid backend.overlay: {cfg.backend_overlay!r} "
+            f"(choose from {', '.join(OVERLAY_PROVIDERS)})"
+        )
     if cfg.multiline not in {"space", "shift-enter", "clipboard"}:
         raise ValueError(f"invalid injection.multiline: {cfg.multiline!r}")
     if not 8_000 <= cfg.sample_rate <= 96_000:

@@ -9,20 +9,16 @@ import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from .asr import RealtimeAsr, check_ready
-from .audio import AudioCapture
-from .config import Config
-from .inject import copy_to_clipboard, normalize_text, type_text
-from .subprocess_env import child_env
-from .niri import (
+from .backends.protocols import (
+    AsrSession,
+    AudioCapture,
+    Backends,
     OutputInfo,
     TargetWindow,
-    current_focused_id,
-    focus_window,
-    focused_output,
-    focused_window,
-    window_exists,
 )
+from .config import Config
+from .subprocess_env import child_env
+from .text import normalize_text
 
 log = logging.getLogger("maic")
 
@@ -45,8 +41,9 @@ class Session:
 
 
 class Daemon:
-    def __init__(self, cfg: Config, overlay):
+    def __init__(self, cfg: Config, backends: Backends, overlay):
         self.cfg = cfg
+        self.backends = backends
         self.overlay = overlay
         self.state = "idle"
         self.session: Session | None = None
@@ -74,7 +71,7 @@ class Daemon:
 
     async def _poll_server(self) -> None:
         while True:
-            ready, _ = await check_ready(self.cfg)
+            ready, _ = await self.backends.asr.check_ready()
             self._set_server_ready(ready)
             await asyncio.sleep(max(1, self.cfg.server_poll_seconds))
 
@@ -182,7 +179,7 @@ class Daemon:
             return {"ok": True, "state": self.state}
         if command == "type":
             text = normalize_text(str(request.get("text", "")), self.cfg)
-            ok = await type_text(text, self.cfg)
+            ok = await self.backends.injection.type_text(text)
             return {"ok": ok, "state": self.state}
         if command == "quit":
             self._request_cancel()
@@ -240,11 +237,11 @@ class Daemon:
 
     async def _run_session(self, copy: bool) -> None:
         session: Session | None = None
-        asr: RealtimeAsr | None = None
+        asr: AsrSession | None = None
         audio: AudioCapture | None = None
         audio_task: asyncio.Task | None = None
         try:
-            output = await focused_output()
+            output = await self.backends.compositor.focused_output()
             if output is None:
                 await self._fail("cannot determine focused output")
                 return
@@ -252,13 +249,13 @@ class Daemon:
             self.overlay.set_state("CHECK")
             self.overlay.set_server_status("checking")
 
-            ready, message = await check_ready(self.cfg)
+            ready, message = await self.backends.asr.check_ready()
             self._set_server_ready(ready)
             if not ready:
                 await self._fail(message)
                 return
 
-            target = await focused_window()
+            target = await self.backends.compositor.focused_window()
             if target is None:
                 await self._fail("cannot determine focused window")
                 return
@@ -268,15 +265,14 @@ class Daemon:
             self.session = session
             self.overlay.set_state("CONNECT")
 
-            asr = RealtimeAsr(
-                self.cfg,
+            asr = self.backends.asr.create_session(
                 on_partial=self.overlay.set_partial,
                 on_final=self.overlay.set_partial,
                 on_error=lambda msg: self._on_asr_error(session, msg),
             )
             await asr.connect()
 
-            audio = AudioCapture(self.cfg)
+            audio = self.backends.audio
             await audio.start()
             self.state = "recording"
             self.overlay.set_state("REC")
@@ -326,19 +322,24 @@ class Daemon:
                 return
 
             # Always keep the transcript if the user asked for it.
-            await copy_to_clipboard(text, self.cfg)
+            await self.backends.injection.copy_to_clipboard(text)
             log.info("clipboard updated after %.2fs", time.monotonic() - stop_started)
 
-            if self.cfg.return_to_target:
-                exists = await window_exists(target.id)
-                log.info("target existence checked after %.2fs", time.monotonic() - stop_started)
-                if not exists:
-                    await self._fail(
-                        "target window disappeared; transcript copied to clipboard",
-                        session,
+            compositor_caps = self.backends.compositor.capabilities
+            if self.cfg.return_to_target and compositor_caps.can_refocus:
+                if compositor_caps.can_check_windows:
+                    exists = await self.backends.compositor.window_exists(target.id)
+                    log.info(
+                        "target existence checked after %.2fs",
+                        time.monotonic() - stop_started,
                     )
-                    return
-                focused = await current_focused_id()
+                    if not exists:
+                        await self._fail(
+                            "target window disappeared; transcript copied to clipboard",
+                            session,
+                        )
+                        return
+                focused = await self.backends.compositor.current_focused_id()
                 log.info("focus before injection: %s (target %s)", focused, target.id)
                 if not await self._ensure_target_focus(target.id):
                     await self._fail(
@@ -348,14 +349,22 @@ class Daemon:
                     return
                 log.info("focus confirmed after %.2fs", time.monotonic() - stop_started)
 
+            injector_caps = self.backends.injection.capabilities
+            if not injector_caps.supports_unicode and not text.isascii():
+                await self._fail(
+                    "injection backend does not support unicode; transcript copied to clipboard",
+                    session,
+                )
+                return
+
             self.state = "injecting"
             self.overlay.set_state("TYPE")
             log.info("typing %d characters into window %s", len(text), target.id)
-            ok = await type_text(text, self.cfg)
+            ok = await self.backends.injection.type_text(text)
             log.info("type_text returned after %.2fs", time.monotonic() - stop_started)
             if not ok:
                 await self._fail(
-                    "wtype failed; transcript copied to clipboard",
+                    "text injection failed; transcript copied to clipboard",
                     session,
                 )
                 return
@@ -386,13 +395,13 @@ class Daemon:
             self._session_task = None
 
     async def _ensure_target_focus(self, window_id: int, timeout: float = 1.0) -> bool:
-        if await current_focused_id() == window_id:
+        if await self.backends.compositor.current_focused_id() == window_id:
             return True
-        if not await focus_window(window_id):
+        if not await self.backends.compositor.focus_window(window_id):
             return False
         deadline = time.monotonic() + timeout
         while time.monotonic() < deadline:
-            if await current_focused_id() == window_id:
+            if await self.backends.compositor.current_focused_id() == window_id:
                 return True
             await asyncio.sleep(0.05)
         return False
@@ -401,14 +410,13 @@ class Daemon:
         session.error_message = message
         session.error_event.set()
 
-    async def _audio_loop(self, audio: AudioCapture, asr: RealtimeAsr, session: Session) -> None:
+    async def _audio_loop(self, audio: AudioCapture, asr: AsrSession, session: Session) -> None:
         try:
             while not session.stop_event.is_set() and not session.cancel_event.is_set():
                 data = await audio.read_chunk()
                 if not data:
                     break
-                stats = AudioCapture.stats(data)
-                self.overlay.set_level(stats.peak)
+                self.overlay.set_level(audio.level(data))
                 await asr.send_audio(data)
         except asyncio.CancelledError:
             raise
