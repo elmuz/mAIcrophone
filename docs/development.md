@@ -265,7 +265,7 @@ without destabilising the daemon.
 | `unittest` | Test suite | Standard library only. |
 
 There is no build system beyond `setuptools` in `pyproject.toml`. Versioning is
-currently `0.0.1` in `maic/__init__.py`; the IPC protocol version is separate
+currently `0.1.0` in `maic/__init__.py`; the IPC protocol version is separate
 and lives in `maic/ipc.py`.
 
 ## Documentation expectations

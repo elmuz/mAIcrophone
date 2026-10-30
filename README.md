@@ -2,23 +2,32 @@
   <img src="docs/assets/logo.jpg" alt="mAIcrophone logo" width="360">
 </p>
 
-# mAIcrophone
+<h1 align="center">mAIcrophone</h1>
 
-[![CI](https://github.com/elmuz/mAIcrophone/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/elmuz/mAIcrophone/actions/workflows/ci.yml)
-[![uv](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/uv/main/assets/badge/v0.json)](https://github.com/astral-sh/uv)
-[![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
-[![ty](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ty/main/assets/badge/v0.json)](https://github.com/astral-sh/ty)
+<p align="center">
+  <em>Local, focusless push-to-talk dictation for Niri/Wayland,<br>
+  backed by <code>nemo-speech serve</code> and the Nemotron 3.5 streaming ASR model.</em>
+</p>
 
-Local, focusless push-to-talk dictation for Niri/Wayland, backed by
-`nemo-speech serve` and the Nemotron 3.5 streaming ASR model.
+<p align="center">
+  <a href="https://github.com/elmuz/mAIcrophone/releases/latest"><img src="https://img.shields.io/github/v/release/elmuz/mAIcrophone?label=release&color=88C0D0" alt="Latest release"></a>
+  <a href="https://github.com/elmuz/mAIcrophone/actions/workflows/ci.yml"><img src="https://github.com/elmuz/mAIcrophone/actions/workflows/ci.yml/badge.svg?branch=master" alt="CI"></a>
+  <a href="https://github.com/astral-sh/uv"><img src="https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/uv/main/assets/badge/v0.json" alt="uv"></a>
+  <a href="https://github.com/astral-sh/ruff"><img src="https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json" alt="Ruff"></a>
+  <a href="https://github.com/astral-sh/ty"><img src="https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ty/main/assets/badge/v0.json" alt="ty"></a>
+</p>
+
+<p align="center">
+  <img src="docs/assets/overlay.png" alt="mAIcrophone focusless dictation overlay showing a live transcript" width="900">
+</p>
 
 mAIcrophone runs as a small background daemon. A global shortcut starts and
 stops recording; live text appears in an overlay that never steals keyboard
 focus, and the final transcript is typed into the window that was focused when
 recording started.
 
-**Status:** first vertical slice. The core recording → ASR → overlay → injection
-flow works end to end. Missing features are tracked in
+**Status:** first public release (`0.1.0`). The core recording → ASR → overlay →
+injection flow works end to end. Missing features are tracked in
 [docs/backlog.md](docs/backlog.md).
 
 ## Main features
@@ -108,6 +117,7 @@ configuration options, see [docs/configuration.md](docs/configuration.md).
 | [Contributing](docs/contributing.md) | Workflow, coding conventions, testing expectations, and good first contributions. |
 | [IPC protocol](docs/ipc.md) | Versioned daemon/CLI Unix-socket protocol. |
 | [Roadmap](docs/roadmap.md) | Architectural sequence and decision gates. |
+| [Releases](https://github.com/elmuz/mAIcrophone/releases) | Versioned releases and changelogs. |
 | [Backlog](docs/backlog.md) | User-facing features, known gaps, and explicitly skipped work. |
 
 ## Current limitations
