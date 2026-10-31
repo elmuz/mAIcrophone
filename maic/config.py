@@ -63,8 +63,7 @@ class Config:
     copy_to_clipboard: bool = True
     primary_selection: bool = True
     return_to_target: bool = True
-    multiline: str = "space"  # space | shift-enter | clipboard
-    long_text_threshold: int = 400
+    multiline: str = "space"  # space | shift-enter
     replacements: dict[str, str] = field(default_factory=dict)
 
     @property
@@ -197,7 +196,6 @@ def load_config(path: Path | None = None) -> Config:
     cfg.primary_selection = bool(injection.get("primary_selection", cfg.primary_selection))
     cfg.return_to_target = bool(injection.get("return_to_target", cfg.return_to_target))
     cfg.multiline = str(injection.get("multiline", cfg.multiline))
-    cfg.long_text_threshold = int(injection.get("long_text_threshold", cfg.long_text_threshold))
     replacements = raw.get("replacements", {})
     if isinstance(replacements, dict):
         cfg.replacements = {str(k): str(v) for k, v in replacements.items()}
@@ -233,7 +231,7 @@ def load_config(path: Path | None = None) -> Config:
             f"invalid backend.overlay: {cfg.backend_overlay!r} "
             f"(choose from {', '.join(OVERLAY_PROVIDERS)})"
         )
-    if cfg.multiline not in {"space", "shift-enter", "clipboard"}:
+    if cfg.multiline not in {"space", "shift-enter"}:
         raise ValueError(f"invalid injection.multiline: {cfg.multiline!r}")
     if cfg.batch_protocol not in {"openai", "whisper-cpp"}:
         raise ValueError(

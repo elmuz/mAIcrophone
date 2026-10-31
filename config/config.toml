@@ -63,13 +63,10 @@ border = "#4C566A"       # window border
 # cancel = "#D08770"     # cancelling state
 
 [injection]
-# wtype | clipboard | both (copy_to_clipboard controls the clipboard side)
-method = "wtype"
 copy_to_clipboard = true
 primary_selection = true
 return_to_target = true
-multiline = "space"          # space | shift-enter | clipboard
-long_text_threshold = 400
+multiline = "space"          # space | shift-enter
 
 [replacements]
 "Pipewire" = "PipeWire"

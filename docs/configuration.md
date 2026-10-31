@@ -94,7 +94,7 @@ cancel = "#D08770"
 copy_to_clipboard = true
 primary_selection = true
 return_to_target = true
-multiline = "space"         # space | shift-enter | clipboard
+multiline = "space"         # space | shift-enter
 
 [replacements]
 "Pipewire" = "PipeWire"
@@ -184,14 +184,14 @@ servers, `127.0.0.1:8080/inference` for whisper.cpp).
 | `copy_to_clipboard` | `true` | Copy the final transcript to the regular clipboard. |
 | `primary_selection` | `true` | Also own the PRIMARY selection for middle-click paste. |
 | `return_to_target` | `true` | Refocus the original window if focus moved while recording. |
-| `multiline` | `space` | `space` flattens newlines; `shift-enter` sends Shift+Enter; `clipboard` uses paste semantics. |
+| `multiline` | `space` | `space` flattens newlines; `shift-enter` sends Shift+Enter. |
 
 The native Wayland clipboard uses `ext-data-control-v1` and
 `libwayland-client`. If unavailable, `wl-copy` is used when installed. The
 default path works in both GTK and headless daemons.
 
-`long_text_threshold` exists in the example config but is not yet used by the
-injection path; mAIcrophone currently always tries `wtype` for the final text.
+mAIcrophone currently always tries `wtype` for the final text; there is no
+length-based clipboard shortcut yet.
 
 ### Overlay
 

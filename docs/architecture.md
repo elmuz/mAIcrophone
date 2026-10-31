@@ -245,10 +245,10 @@ Decision: stay on Python + GTK4 for now. Re-evaluate under the gates in
   - Overwriting the clipboard is acceptable by user preference; the only real
     costs are losing previous clipboard contents and clipboard-history/privacy.
 - Multiline:
-  - configurable newline policy: `space` (v1 default), `shift-enter`, `clipboard`,
-  - `shift-enter` is the intended long-term default for chat prompts,
-  - implement after the basic vertical slice if it adds too much risk.
-- Long-text threshold: configurable; initially always try `wtype`.
+  - configurable newline policy: `space` (default) or `shift-enter`,
+  - `shift-enter` is the intended long-term default for chat prompts.
+- No length-based clipboard threshold yet; the final text always goes through
+  `wtype` first, with clipboard fallback when injection is impossible.
 - Post-ASR replacement table for code terms:
   - `Pipewire` -> `PipeWire`
   - `System D` -> `systemd`
@@ -278,6 +278,14 @@ Config file:
 [server]
 url = "ws://127.0.0.1:8080/v1/audio/transcriptions/realtime"
 
+[backend]
+compositor = "niri"      # niri | sway | hyprland | auto
+audio = "pulse"          # pulse | pw-record
+injection = "wtype"
+asr = "nemo-speech"      # nemo-speech | openai-http | faster-whisper |
+                         # whisper-cpp | batch-http
+overlay = "gtk"          # gtk | null
+
 [audio]
 source = ""              # empty = default PipeWire source
 sample_rate = 16000
@@ -302,12 +310,10 @@ border_width = 1
 background_opacity = 0.94
 
 [injection]
-method = "wtype"         # wtype | clipboard | both
 copy_to_clipboard = true # user preference: keep transcript on clipboard
 primary_selection = true
 return_to_target = true
-multiline = "space"      # space | shift-enter | clipboard
-long_text_threshold = 400
+multiline = "space"      # space | shift-enter
 
 [replacements]
 "Pipewire" = "PipeWire"
