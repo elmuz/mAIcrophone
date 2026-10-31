@@ -29,8 +29,8 @@ focus, and the final transcript is typed into the window that was focused when
 recording started.
 
 **Status:** current release (`0.2.1`). The recording → ASR → overlay → injection
-flow works end to end, with native Niri, Sway, and Hyprland compositor backends. Missing features are tracked in
-[docs/backlog.md](docs/backlog.md).
+flow works end to end, with native Niri, Sway, and Hyprland compositor
+backends. Missing features are tracked in [docs/backlog.md](docs/backlog.md).
 
 ## Main features
 
@@ -99,16 +99,20 @@ maic daemon
 In another shell:
 
 ```bash
-maic toggle     # start recording; call again to stop and type
-maic cancel     # discard the current recording
-maic status     # show daemon state
+maic toggle             # start recording; call again to stop and type
+maic cancel             # discard the current recording
+maic status             # show daemon state
+maic punctuate period   # add . at the visible sentence while recording
+maic punctuate question # add ? at the visible sentence while recording
 ```
 
 Add the shortcuts to your compositor configuration. Niri:
 
 ```kdl
-Mod+Alt+V       { spawn "maic" "toggle"; }
-Mod+Alt+Shift+V { spawn "maic" "cancel"; }
+Mod+Alt+V            { spawn "maic" "toggle"; }
+Mod+Alt+Shift+V      { spawn "maic" "cancel"; }
+Mod+Alt+Period       { spawn "maic" "punctuate" "period"; }
+Mod+Alt+Shift+Period { spawn "maic" "punctuate" "question"; }
 ```
 
 Sway:
@@ -116,6 +120,8 @@ Sway:
 ```ini
 bindsym $mod+Mod1+v exec maic toggle
 bindsym $mod+Mod1+Shift+v exec maic cancel
+bindsym $mod+Mod1+period exec maic punctuate period
+bindsym $mod+Mod1+Shift+period exec maic punctuate question
 ```
 
 Hyprland:
@@ -123,6 +129,8 @@ Hyprland:
 ```ini
 bind = $mainMod ALT, V, exec, maic toggle
 bind = $mainMod ALT SHIFT, V, exec, maic cancel
+bind = $mainMod ALT, period, exec, maic punctuate period
+bind = $mainMod ALT SHIFT, period, exec, maic punctuate question
 ```
 
 For systemd user services, headless operation, overlay launching, and all
@@ -149,7 +157,8 @@ configuration options, see [docs/configuration.md](docs/configuration.md).
   shortcuts.
 - The overlay caps its height, auto-scrolls long transcripts, and has no manual
   scrolling.
-- No endpointing, transcript history, or spoken/manual punctuation yet.
+- No endpointing, transcript history, or spoken punctuation. Manual `.` and
+  `?` insertion is available through the compositor shortcuts above.
 - Partial text is best-effort; the final transcript is authoritative.
 
 ## License

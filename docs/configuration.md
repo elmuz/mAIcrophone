@@ -256,8 +256,10 @@ Add bindings to your compositor config, choosing keys that do not conflict.
 Niri (`~/.config/niri/config.kdl`):
 
 ```kdl
-Mod+Alt+V       { spawn "maic" "toggle"; }
-Mod+Alt+Shift+V { spawn "maic" "cancel"; }
+Mod+Alt+V            { spawn "maic" "toggle"; }
+Mod+Alt+Shift+V      { spawn "maic" "cancel"; }
+Mod+Alt+Period       { spawn "maic" "punctuate" "period"; }
+Mod+Alt+Shift+Period { spawn "maic" "punctuate" "question"; }
 ```
 
 Sway (`~/.config/sway/config`):
@@ -265,6 +267,8 @@ Sway (`~/.config/sway/config`):
 ```ini
 bindsym $mod+Mod1+v exec maic toggle
 bindsym $mod+Mod1+Shift+v exec maic cancel
+bindsym $mod+Mod1+period exec maic punctuate period
+bindsym $mod+Mod1+Shift+period exec maic punctuate question
 ```
 
 Hyprland (`~/.config/hypr/hyprland.conf`):
@@ -272,15 +276,22 @@ Hyprland (`~/.config/hypr/hyprland.conf`):
 ```ini
 bind = $mainMod ALT, V, exec, maic toggle
 bind = $mainMod ALT SHIFT, V, exec, maic cancel
+bind = $mainMod ALT, period, exec, maic punctuate period
+bind = $mainMod ALT SHIFT, period, exec, maic punctuate question
 ```
 
 `maic toggle` starts recording when idle and stops-and-types when recording.
-`maic cancel` discards the current recording. Additional diagnostics:
+`maic cancel` discards the current recording. The optional `maic punctuate
+period|question` binds attach `.` or `?` to the sentence currently visible in
+the overlay; the same command only types at the cursor when idle if the last
+target window still has focus. Additional commands:
 
 ```bash
 maic status
 maic stop
 maic type "hello"
+maic punctuate period
+maic punctuate question
 ```
 
 ## Running as a user service

@@ -13,9 +13,10 @@ directory contains the detailed documentation.
 | [Roadmap](roadmap.md) | Architectural sequence and the gates for larger changes such as a Rust port. |
 | [Backlog](backlog.md) | User-facing features, known gaps, and explicitly skipped work. |
 
-Historical exploration lives in the repository root:
-
-- [BRAINSTORM.md](../BRAINSTORM.md) — early product/feature brainstorming;
-- [SPIKE.md](../SPIKE.md) — ASR/WebSocket spike notes and measurements.
+Live compositor smoke tests are documented in
+[tests/integration/README.md](../tests/integration/README.md).
 
 The logo is stored at [assets/logo.jpg](assets/logo.jpg).
+
+Historical spike and brainstorming notes are not maintained; use the Git
+history if you need the original exploration record.

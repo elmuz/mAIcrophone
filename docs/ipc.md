@@ -97,7 +97,7 @@ Defined error codes:
 | `protocol_mismatch` | Client and daemon use different protocol versions. |
 | `unknown_command` | The command name is not implemented. |
 | `invalid_argument` | A command field has the wrong type or is missing. |
-| `injection_failed` | The `type` command could not inject text. |
+| `injection_failed` | The `type` or idle `punctuate` command could not inject text. |
 | `internal_error` | Unexpected daemon failure; details are in the error string and the journal. |
 
 The CLI prints the `error` text and exits non-zero for any failed response.
@@ -130,8 +130,9 @@ Fields:
   `checking`.
 - `overlay`: whether the GTK overlay is enabled for this daemon.
 - `version`: the mAIcrophone application version (not the protocol version).
-- `session`: `null` when idle, otherwise an object with the captured target:
-  `{"target": {"id": 42, "pid": 7, "app_id": "kitty", "title": "..."}}`.
+- `session`: `null` when idle, otherwise an object with the captured target
+  and the number of pending punctuation marks:
+  `{"target": {"id": 42, "pid": 7, "app_id": "kitty", "title": "..."}, "marks": 0}`.
 
 The target is captured at recording start. It is the window that will receive
 the transcript if focus refocusing is available.

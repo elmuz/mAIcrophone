@@ -7,7 +7,8 @@ product and protocol decisions, see [architecture.md](architecture.md) and
 
 ## Prerequisites
 
-mAIcrophone targets Arch Linux, Wayland, and Niri. The core daemon and CLI need:
+mAIcrophone targets Arch Linux and Wayland, with native compositor support for
+Niri, Sway, and Hyprland. The core daemon and CLI need:
 
 - Python 3.11 or newer;
 - `wtype` for text injection;
@@ -95,6 +96,8 @@ maic cancel
 maic language
 maic language it-IT
 maic type "diagnostic text"
+maic punctuate period
+maic punctuate question
 ```
 
 The overlay needs `gtk4-layer-shell` to be linked before GTK's
@@ -161,6 +164,7 @@ maic/
   config.py           TOML loading, defaults, environment overrides, validation
   ipc.py              versioned JSON wire protocol and validation
   text.py             provider-independent transcript normalization
+  marks.py            anchored . / ? insertion into a transcript
   niri.py             compatibility import for the Niri backend
   asr.py              compatibility import for the nemo-speech backend
   inject.py           compatibility import for injection helpers
@@ -184,7 +188,9 @@ maic/
 config/config.toml    example configuration
 systemd/              user service units
 scripts/              layer-shell launcher
+spike_ws_asr.py       standalone raw ASR WebSocket probe
 tests/                stdlib unittest suite
+  integration/        optional live compositor smoke tests
 docs/                 architecture, development, configuration, protocol
 ```
 
@@ -236,6 +242,9 @@ without destabilising the daemon.
   diagnostics. Send one newline-terminated JSON object per connection; see
   [ipc.md](ipc.md).
 - Use `maic type "hello"` to test injection without recording.
+- For raw ASR protocol debugging, `python spike_ws_asr.py [seconds] [url]`
+  captures from `pw-record` and prints partial, final, and committed events
+  without involving the daemon.
 - Check the ASR server readiness endpoint directly:
 
   ```bash

@@ -1,6 +1,7 @@
 # mAIcrophone — software design
 
-Status: draft. Decisions marked **[proposed]** need confirmation.
+Status: current design. The implementation sequence and open contracts are
+noted where they still matter.
 
 ## 1. Product shape
 
@@ -27,16 +28,18 @@ maic CLI  --Unix socket-->  maic daemon
 ```
 
 - **`maic` daemon**: long-running, one instance, owns all state.
-- **`maic` CLI**: thin client for `toggle`, `stop`, `cancel`, `status`.
+- **`maic` CLI**: thin client for `toggle`, `stop`, `cancel`, `status`,
+  `language`, `type`, and `punctuate`.
 - **`nemo-speech serve`**: separate process/service, not embedded.
 - **No settings GUI in v1**: one TOML config file.
 - **No transcript history in v1** (optional later).
 
 ## 2. MVP behaviour
 
-- `Mod+V` starts recording.
+- `Mod+Alt+V` starts recording.
 - Same shortcut stops recording and commits.
 - A separate shortcut cancels without typing.
+- Optional shortcuts insert `.` or `?` at the sentence visible in the overlay.
 - While recording:
   - focusless overlay at bottom centre,
   - VU meter,
@@ -64,16 +67,18 @@ Shortcuts are deliberately **not hard-coded**. The daemon exposes commands and
 the user chooses compositor bindings that do not conflict with existing ones:
 
 ```kdl
-Mod+Alt+V       { spawn "maic" "toggle"; }
-Mod+Alt+Shift+V { spawn "maic" "cancel"; }
+Mod+Alt+V            { spawn "maic" "toggle"; }
+Mod+Alt+Shift+V      { spawn "maic" "cancel"; }
+Mod+Alt+Period       { spawn "maic" "punctuate" "period"; }
+Mod+Alt+Shift+Period { spawn "maic" "punctuate" "question"; }
 ```
 
-The exact keys are decided later based on the current compositor config.
+These are examples; choose keys that do not conflict with your compositor.
 Niri, Sway, and Hyprland examples are in `configuration.md`.
 
 ## 3. Process model and IPC
 
-**[proposed]** Daemon + CLI, not one process per dictation.
+Daemon + CLI, not one process per dictation.
 
 - `maic daemon` runs as a systemd user service.
 - It listens on `$XDG_RUNTIME_DIR/maic.sock`.
@@ -170,7 +175,7 @@ current requirement.
 
 ## 7. Overlay
 
-**[proposed]** Focusless layer-shell surface, not a normal window.
+Focusless layer-shell surface, not a normal window.
 
 Properties:
 
@@ -220,7 +225,7 @@ Decision: stay on Python + GTK4 for now. Re-evaluate under the gates in
 
 ## 8. Text injection
 
-**[proposed]** `wtype` subprocess first.
+`wtype` subprocess first, with clipboard fallback.
 
 - Final text only.
 - Target locking:
@@ -272,7 +277,7 @@ generic fallback.
 
 ## 9. Configuration
 
-**[proposed]** XDG paths:
+XDG paths:
 
 ```text
 $XDG_CONFIG_HOME/maic/config.toml     # config
@@ -283,60 +288,13 @@ $XDG_RUNTIME_DIR/maic.sock            # daemon IPC
 `$XDG_CONFIG_HOME` defaults to `~/.config`, `$XDG_STATE_HOME` to
 `~/.local/state`, `$XDG_RUNTIME_DIR` is provided by the session.
 
-Config file:
-
-```toml
-[server]
-url = "ws://127.0.0.1:8080/v1/audio/transcriptions/realtime"
-
-[backend]
-compositor = "niri"      # niri | sway | hyprland | auto
-audio = "pulse"          # pulse | pw-record
-injection = "wtype"
-asr = "nemo-speech"      # nemo-speech | openai-http | faster-whisper |
-                         # whisper-cpp | batch-http
-overlay = "gtk"          # gtk | null
-
-[audio]
-source = ""              # empty = default PipeWire source
-sample_rate = 16000
-chunk_ms = 100
-
-[asr]
-language = "en-US"     # en-US | it-IT | auto
-punctuation = true
-context = []             # word boosting disabled by default in v1
-
-[overlay]
-width_percent = 75
-max_width_px = 2000
-max_height_percent = 30
-margin_px = 56
-font = "FiraCode Nerd Font Mono 13"
-max_lines = 10
-min_font_size = 11
-font_steps = 3
-corner_radius = 10
-border_width = 1
-background_opacity = 0.94
-
-[injection]
-copy_to_clipboard = true # user preference: keep transcript on clipboard
-primary_selection = true
-return_to_target = true
-multiline = "space"      # space | shift-enter
-
-[replacements]
-"Pipewire" = "PipeWire"
-"System D" = "systemd"
-"Enemmotron" = "Nemotron"
-```
-
-Environment overrides for development:
+The canonical example, precedence rules, and per-key reference live in
+[configuration.md](configuration.md). Environment overrides:
 
 ```text
 MAIC_CONFIG
 MAIC_SERVER_URL
+MAIC_LANGUAGE
 MAIC_LOG
 ```
 
@@ -357,8 +315,6 @@ MAIC_LOG
 
 If the server is offline, the user must find out **immediately**, not after
 speaking for 30 seconds.
-
-**[proposed]**:
 
 - On daemon startup, probe `GET /ready` and cache the result.
 - Before every recording, probe `/ready` with a short timeout (~300 ms).
@@ -398,7 +354,10 @@ primary feedback surface.
 7. **Server lifecycle**
    - external systemd service (recommended), or daemon starts/stops it.
 
-## 13. Suggested first vertical slice
+## 13. Implementation sequence
+
+The first vertical slice landed in this order and remains the base of the
+current code:
 
 1. `maic daemon` + Unix socket + `maic toggle`.
 2. native audio capture -> WS -> final transcript printed to journal.
@@ -407,13 +366,13 @@ primary feedback surface.
 5. Compositor focus guard + clipboard fallback.
 6. Systemd units + config + compositor bind snippets.
 
-Do not add endpointing, history, additional compositor backends, or native
-PipeWire bindings until this slice works end to end.
+Broader work such as endpointing, history, and native PipeWire bindings stays
+in `backlog.md` and `roadmap.md`.
 
 ## 14. Contracts that deserve deeper definition
 
-These are the places where vague behaviour will cause bugs. The first four need
-a real contract before or during the first vertical slice.
+These are the places where vague behaviour causes bugs. They are implemented,
+but keep them explicit when changing the code.
 
 1. **Overlay long-text contract**
    - max height, minimum font size, wrapping, overflow behaviour,
