@@ -3,6 +3,8 @@ from __future__ import annotations
 import asyncio
 import json
 import unittest
+from pathlib import Path
+from unittest import mock
 
 from maic.backends.protocols import (
     AsrCapabilities,
@@ -12,7 +14,7 @@ from maic.backends.protocols import (
     InjectionCapabilities,
 )
 from maic.config import Config
-from maic.daemon import Daemon
+from maic.daemon import Daemon, State, socket_path
 from maic.ipc import (
     PROTOCOL_VERSION,
     IpcProtocolError,
@@ -145,6 +147,20 @@ def make_daemon():
     return Daemon(Config(), backends, overlay), injection, overlay
 
 
+class SocketPathTests(unittest.TestCase):
+    def test_runtime_dir_is_preferred(self):
+        with mock.patch.dict(
+            "os.environ",
+            {"XDG_RUNTIME_DIR": "/run/user/1000", "XDG_STATE_HOME": "/state"},
+            clear=True,
+        ):
+            self.assertEqual(socket_path(), Path("/run/user/1000/maic.sock"))
+
+    def test_state_dir_is_used_without_runtime_dir(self):
+        with mock.patch.dict("os.environ", {"XDG_STATE_HOME": "/state"}, clear=True):
+            self.assertEqual(socket_path(), Path("/state/maic/maic.sock"))
+
+
 class EnvelopeTests(unittest.TestCase):
     def test_request_has_version_and_command(self):
         self.assertEqual(
@@ -183,6 +199,7 @@ class DaemonDispatchTests(unittest.TestCase):
         response = asyncio.run(daemon.dispatch(make_request("status")))
         self.assertTrue(response["ok"])
         self.assertEqual(response["protocol"], PROTOCOL_VERSION)
+        self.assertEqual(response["state"], State.IDLE)
         self.assertEqual(response["state"], "idle")
         self.assertEqual(response["language"], "en-US")
         self.assertTrue(response["server_ready"])

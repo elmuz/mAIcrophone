@@ -6,7 +6,9 @@ import logging
 import os
 import threading
 import time
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
+from enum import StrEnum
 from pathlib import Path
 
 from . import __version__
@@ -36,7 +38,25 @@ def socket_path() -> Path:
     runtime = os.environ.get("XDG_RUNTIME_DIR")
     if runtime:
         return Path(runtime) / "maic.sock"
+    # /tmp is world-writable and makes the socket vulnerable to symlink and
+    # pre-creation games. Prefer the per-user state directory when the session
+    # runtime directory is unavailable (e.g. launched from a bare shell).
+    state = Path(os.environ.get("XDG_STATE_HOME", Path.home() / ".local" / "state"))
+    path = state / "maic" / "maic.sock"
+    # AF_UNIX paths are limited to roughly 100 bytes. A very long $HOME must
+    # not turn the fallback into a startup failure.
+    if len(os.fsencode(path)) < 100:
+        return path
     return Path(f"/tmp/maic-{os.getuid()}.sock")
+
+
+class State(StrEnum):
+    IDLE = "idle"
+    STARTING = "starting"
+    RECORDING = "recording"
+    STOPPING = "stopping"
+    CANCELLING = "cancelling"
+    INJECTING = "injecting"
 
 
 @dataclass
@@ -55,7 +75,7 @@ class Daemon:
         self.cfg = cfg
         self.backends = backends
         self.overlay = overlay
-        self.state = "idle"
+        self.state = State.IDLE
         self.session: Session | None = None
         self.loop = asyncio.new_event_loop()
         self.thread = threading.Thread(target=self._run_loop, name="maic-asyncio", daemon=True)
@@ -65,6 +85,14 @@ class Daemon:
         self.server_ready: bool | None = None
         self._keep_error = False
         self._started = threading.Event()
+        self._commands: dict[str, Callable[[dict], Awaitable[dict]]] = {
+            "status": self._cmd_status,
+            "language": self._cmd_language,
+            "toggle": self._cmd_toggle,
+            "stop": self._cmd_stop,
+            "cancel": self._cmd_cancel,
+            "type": self._cmd_type,
+        }
 
     def _run_loop(self) -> None:
         asyncio.set_event_loop(self.loop)
@@ -129,7 +157,7 @@ class Daemon:
 
     async def _start_ipc(self) -> None:
         path = socket_path()
-        path.parent.mkdir(parents=True, exist_ok=True)
+        path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
         if path.exists():
             try:
                 _, writer = await asyncio.open_unix_connection(path)
@@ -202,68 +230,75 @@ class Daemon:
 
     async def dispatch(self, request: dict) -> dict:
         command = str(request.get("command", ""))
-        if command == "status":
-            return ok(**self._status_snapshot())
-        if command == "language":
-            value = request.get("language", "")
-            if not isinstance(value, str):
-                return error("language must be a string", "invalid_argument")
-            code = value.strip()
-            if not code:
-                return ok(language=self.cfg.language)
-            self.cfg.language = code
-            self.overlay.set_language(code)
-            log.info("language set to %s", code)
-            return ok(language=code)
-        if command == "toggle":
-            clipboard = request.get("clipboard", False)
-            if not isinstance(clipboard, bool):
-                return error("clipboard must be a boolean", "invalid_argument")
-            if self.state == "idle":
-                self._start_session(copy=clipboard)
-                return ok(state=self.state)
-            if self.state in {"recording", "starting"}:
-                self._request_stop()
-                return ok(state=self.state)
-            return ok(state=self.state)
-        if command == "stop":
+        handler = self._commands.get(command)
+        if handler is None:
+            return error(f"unknown command: {command}", "unknown_command")
+        return await handler(request)
+
+    async def _cmd_status(self, request: dict) -> dict:
+        return ok(**self._status_snapshot())
+
+    async def _cmd_language(self, request: dict) -> dict:
+        value = request.get("language", "")
+        if not isinstance(value, str):
+            return error("language must be a string", "invalid_argument")
+        code = value.strip()
+        if not code:
+            return ok(language=self.cfg.language)
+        self.cfg.language = code
+        self.overlay.set_language(code)
+        log.info("language set to %s", code)
+        return ok(language=code)
+
+    async def _cmd_toggle(self, request: dict) -> dict:
+        clipboard = request.get("clipboard", False)
+        if not isinstance(clipboard, bool):
+            return error("clipboard must be a boolean", "invalid_argument")
+        if self.state == State.IDLE:
+            self._start_session(copy=clipboard)
+        elif self.state in {State.RECORDING, State.STARTING}:
             self._request_stop()
-            return ok(state=self.state)
-        if command == "cancel":
-            self._request_cancel()
-            return ok(state=self.state)
-        if command == "type":
-            value = request.get("text")
-            if not isinstance(value, str):
-                return error("text must be a string", "invalid_argument")
-            text = normalize_text(value, self.cfg)
-            injected = await self.backends.injection.type_text(text)
-            if not injected:
-                return error("text injection failed", "injection_failed")
-            return ok(state=self.state)
-        return error(f"unknown command: {command}", "unknown_command")
+        return ok(state=self.state)
+
+    async def _cmd_stop(self, request: dict) -> dict:
+        self._request_stop()
+        return ok(state=self.state)
+
+    async def _cmd_cancel(self, request: dict) -> dict:
+        self._request_cancel()
+        return ok(state=self.state)
+
+    async def _cmd_type(self, request: dict) -> dict:
+        value = request.get("text")
+        if not isinstance(value, str):
+            return error("text must be a string", "invalid_argument")
+        text = normalize_text(value, self.cfg)
+        injected = await self.backends.injection.type_text(text)
+        if not injected:
+            return error("text injection failed", "injection_failed")
+        return ok(state=self.state)
 
     def _start_session(self, copy: bool) -> None:
-        if self.state != "idle":
+        if self.state != State.IDLE:
             return
-        self.state = "starting"
+        self.state = State.STARTING
         self._session_task = self.loop.create_task(self._run_session(copy))
 
     def _request_stop(self) -> None:
         if self.session is None:
             return
-        if self.state == "recording":
+        if self.state == State.RECORDING:
             log.info("stop requested")
-            self.state = "stopping"
+            self.state = State.STOPPING
             self.overlay.set_state("STOP")
             self.session.stop_event.set()
-        elif self.state == "starting":
+        elif self.state == State.STARTING:
             self._request_cancel()
 
     def _request_cancel(self) -> None:
         if self.session is None:
             return
-        self.state = "cancelling"
+        self.state = State.CANCELLING
         self.overlay.set_state("CANCEL")
         self.session.cancel_event.set()
 
@@ -329,7 +364,7 @@ class Daemon:
 
             audio = self.backends.audio
             await audio.start()
-            self.state = "recording"
+            self.state = State.RECORDING
             self.overlay.set_state("REC")
 
             audio_task = asyncio.create_task(self._audio_loop(audio, asr, session))
@@ -345,7 +380,7 @@ class Daemon:
                 task.cancel()
 
             if session.cancel_event.is_set():
-                self.state = "cancelling"
+                self.state = State.CANCELLING
                 self.overlay.set_state("CANCEL")
                 await asr.cancel()
                 return
@@ -353,7 +388,7 @@ class Daemon:
             if session.error_event.is_set():
                 raise RuntimeError(session.error_message or "ASR error")
 
-            self.state = "stopping"
+            self.state = State.STOPPING
             self.overlay.set_state("STOP")
             stop_started = time.monotonic()
             await audio.stop()
@@ -412,7 +447,7 @@ class Daemon:
                 )
                 return
 
-            self.state = "injecting"
+            self.state = State.INJECTING
             self.overlay.set_state("TYPE")
             log.info("typing %d characters into window %s", len(text), target.id)
             ok = await self.backends.injection.type_text(text)
@@ -445,7 +480,7 @@ class Daemon:
             if not self._keep_error:
                 self.overlay.hide()
             self._keep_error = False
-            self.state = "idle"
+            self.state = State.IDLE
             self.session = None
             self._session_task = None
 
@@ -503,9 +538,7 @@ class Daemon:
         return levels, interval
 
     async def _audio_loop(self, audio: AudioCapture, asr: AsrSession, session: Session) -> None:
-        bytes_per_second = audio.capabilities.sample_rate * 2 * max(
-            1, audio.capabilities.channels
-        )
+        bytes_per_second = audio.capabilities.sample_rate * 2 * max(1, audio.capabilities.channels)
         # Capture in small blocks so the waveform gets fresh samples at roughly
         # frame rate. Accumulate them into the configured ASR chunk size below.
         meter_bytes = max(2, int(bytes_per_second * 0.02))

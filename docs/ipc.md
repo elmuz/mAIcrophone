@@ -8,7 +8,10 @@ Third-party clients must not rely on it until this document says otherwise.
 ## Transport
 
 - Unix stream socket at `$XDG_RUNTIME_DIR/maic.sock`, or
-  `/tmp/maic-<uid>.sock` when `XDG_RUNTIME_DIR` is unset.
+  `$XDG_STATE_HOME/maic/maic.sock` (default
+  `~/.local/state/maic/maic.sock`) when `XDG_RUNTIME_DIR` is unset. If that
+  path exceeds the Unix socket length limit, `/tmp/maic-<uid>.sock` is used
+  as a last resort.
 - Socket mode is `0600`; the daemon is single-user and single-instance.
 - One request and one response per connection.
 - Messages are UTF-8 JSON objects terminated by a newline (`\n`).
