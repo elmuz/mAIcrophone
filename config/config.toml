@@ -6,7 +6,7 @@ poll_seconds = 5
 
 [backend]
 # Current providers. Unknown names fail config validation at daemon startup.
-compositor = "niri"         # native Niri IPC socket
+compositor = "niri"         # niri | sway | hyprland | auto
 audio = "pulse"             # pulse | pw-record
 injection = "wtype"
 # nemo-speech | openai-http | faster-whisper | whisper-cpp | batch-http

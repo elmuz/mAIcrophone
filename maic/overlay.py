@@ -12,8 +12,8 @@ gi.require_version("Gdk", "4.0")
 gi.require_version("Pango", "1.0")
 from gi.repository import Gdk, GLib, Gtk, Pango  # noqa: E402
 
+from .backends.protocols import OutputInfo  # noqa: E402
 from .config import Config  # noqa: E402
-from .niri import OutputInfo  # noqa: E402
 from .overlay_null import NullOverlay  # noqa: E402,F401
 
 SERVER_LABELS = {

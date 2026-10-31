@@ -13,7 +13,7 @@ from typing import Literal, Protocol, runtime_checkable
 
 # Provider names accepted by the configuration. Keep these tuples in sync with
 # the factories in :mod:`maic.backends`.
-COMPOSITOR_PROVIDERS = ("niri",)
+COMPOSITOR_PROVIDERS = ("niri", "sway", "hyprland", "auto")
 AUDIO_PROVIDERS = ("pulse", "pw-record")
 INJECTION_PROVIDERS = ("wtype",)
 ASR_PROVIDERS = (

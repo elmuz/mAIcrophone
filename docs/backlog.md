@@ -7,8 +7,8 @@ features and known gaps.
 
 - Replace remaining external binary calls (`wtype`; optional fallbacks such as
   `pw-record` and `wl-copy`) with native libraries/APIs where practical, behind
-  the backend interfaces from `roadmap.md` step 2. Niri IPC, audio capture
-  (`pulse`), and the default clipboard path are now native.
+  the backend interfaces from `roadmap.md` step 2. Niri/Sway/Hyprland IPC,
+  audio capture (`pulse`), and the default clipboard path are now native.
 - Keep the native Niri/clipboard/audio implementations covered by protocol and
   lifecycle unit tests; add real-session smoke tests when a disposable Niri or
   PipeWire session is available.
@@ -31,6 +31,6 @@ features and known gaps.
 ## Explicitly skipped for now
 
 - Spoken punctuation ("comma", "full stop", etc.).
-- Non-Niri compositor support. Backend seams are being prepared, but no second
-  compositor is planned yet.
+- Additional compositor backends beyond Niri, Sway, and Hyprland. A generic
+  foreign-toplevel backend is a possible later addition.
 - Rust rewrite. Re-evaluate only under the gates in `roadmap.md` step 5.

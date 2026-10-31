@@ -48,7 +48,7 @@ url = "ws://127.0.0.1:8080/v1/audio/transcriptions/realtime"
 poll_seconds = 5
 
 [backend]
-compositor = "niri"         # niri
+compositor = "niri"         # niri | sway | hyprland | auto
 audio = "pulse"             # pulse | pw-record
 injection = "wtype"         # wtype
 asr = "nemo-speech"         # nemo-speech | openai-http | faster-whisper |
@@ -122,10 +122,18 @@ libraries.
 ### Compositor
 
 - `niri` — native Niri IPC through `$NIRI_SOCKET`.
+- `sway` — native Sway i3-compatible IPC through `$SWAYSOCK`. This talks to
+  Sway directly and does not require `swaymsg`.
+- `hyprland` — native Hyprland command socket through
+  `$HYPRLAND_INSTANCE_SIGNATURE`. This talks to Hyprland directly and does not
+  require `hyprctl`.
+- `auto` — inspect the session environment and runtime sockets, then select
+  Niri, Sway, or Hyprland.
 
-Niri is the only supported compositor. The provider finds the focused window
-and output, checks whether the target still exists, and can refocus the target
-before injection.
+Each provider finds the focused window and output, checks whether the target
+still exists, and can refocus the target before injection. Sway and Hyprland
+fall back to the newest matching IPC socket in `$XDG_RUNTIME_DIR`, which helps
+systemd user services that did not inherit the compositor environment.
 
 ### Audio
 
@@ -241,14 +249,29 @@ NeMo-Speech 0.2.0 the Italian grammar directory is present but empty, so
 Italian ITN is unavailable. Installation is covered in
 [development.md](development.md#local-setup).
 
-## Niri bindings
+## Compositor bindings
 
-Add bindings to `~/.config/niri/config.kdl`, choosing keys that do not
-conflict:
+Add bindings to your compositor config, choosing keys that do not conflict.
+
+Niri (`~/.config/niri/config.kdl`):
 
 ```kdl
 Mod+Alt+V       { spawn "maic" "toggle"; }
 Mod+Alt+Shift+V { spawn "maic" "cancel"; }
+```
+
+Sway (`~/.config/sway/config`):
+
+```ini
+bindsym $mod+Mod1+v exec maic toggle
+bindsym $mod+Mod1+Shift+v exec maic cancel
+```
+
+Hyprland (`~/.config/hypr/hyprland.conf`):
+
+```ini
+bind = $mainMod ALT, V, exec, maic toggle
+bind = $mainMod ALT SHIFT, V, exec, maic cancel
 ```
 
 `maic toggle` starts recording when idle and stops-and-types when recording.

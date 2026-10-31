@@ -171,6 +171,9 @@ maic/
     protocols.py      backend contracts, capabilities, provider names
     __init__.py       backend factory and lazy imports
     niri.py           native Niri IPC compositor
+    sway.py           native Sway i3-IPC compositor
+    hyprland.py       native Hyprland IPC compositor
+    auto.py           compositor auto-detection
     pulse.py          libpulse-simple capture through ctypes
     pipewire.py       pw-record capture fallback
     nemo.py           streaming nemo-speech WebSocket ASR

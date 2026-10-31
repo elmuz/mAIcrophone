@@ -18,10 +18,22 @@ if TYPE_CHECKING:
 
 
 def _build_compositor(name: str):
+    if name == "auto":
+        from .auto import detect_compositor
+
+        name = detect_compositor()
     if name == "niri":
         from .niri import NiriCompositor
 
         return NiriCompositor()
+    if name == "sway":
+        from .sway import SwayCompositor
+
+        return SwayCompositor()
+    if name == "hyprland":
+        from .hyprland import HyprlandCompositor
+
+        return HyprlandCompositor()
     raise ValueError(
         f"unknown backend.compositor {name!r}; choose from {', '.join(COMPOSITOR_PROVIDERS)}"
     )

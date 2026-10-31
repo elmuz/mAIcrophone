@@ -1,6 +1,7 @@
 # Contributing
 
-Contributions are welcome, especially around reliability on Niri/Wayland,
+Contributions are welcome, especially around reliability on Niri, Sway,
+Hyprland, and Wayland,
 backend implementations, tests, and documentation. This project is a local,
 single-user dictation tool: favour small, focused changes that preserve the
 existing contracts.
@@ -16,7 +17,7 @@ existing contracts.
 - For a substantial change, open an issue or describe the approach first. Small
   bug fixes and documentation improvements can go straight to a pull request.
 
-The current scope is Niri on Wayland. Non-Niri support, endpointing, history,
+The current compositor scope is Niri, Sway, and Hyprland. Other compositors, endpointing, history,
 spoken punctuation, and a Rust rewrite are intentionally deferred; see the
 roadmap for the gates that would change that.
 
@@ -48,7 +49,7 @@ in one pull request. It makes review and rollback harder.
 
 Useful areas, roughly in order of value:
 
-- **Tests for native backends.** Niri IPC, the native clipboard, and Pulse
+- **Tests for native backends.** Niri/Sway/Hyprland IPC, the native clipboard, and Pulse
   capture are covered by protocol/lifecycle tests; more edge cases are always
   useful. Real-session smoke tests are welcome but must remain optional.
 - **Reliability fixes.** Focus changes, missing windows, server disconnects,

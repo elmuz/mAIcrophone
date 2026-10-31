@@ -112,5 +112,6 @@ Python daemon as a permanent split; choose one runtime per deployment.
 
 - Endpointing, transcript history, multiple finals per session.
 - Spoken punctuation.
-- A second compositor implementation (the seams are preparation, not a promise).
+- Generic compositor support beyond the native Niri, Sway, and Hyprland backends.
+  A foreign-toplevel backend remains a possible later addition.
 - Native PipeWire/input backends, unless needed to validate a protocol.

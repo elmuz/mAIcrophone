@@ -7,7 +7,7 @@ directory contains the detailed documentation.
 | --- | --- |
 | [Architecture](architecture.md) | Components, process model, session state machine, ASR transport, overlay, injection, configuration decisions, and open contracts. |
 | [Development](development.md) | Local setup, tests, repository layout, backend development, debugging, and the libraries used. |
-| [Configuration](configuration.md) | Config reference, providers, languages, systemd units, Niri bindings, and troubleshooting. |
+| [Configuration](configuration.md) | Config reference, providers, languages, systemd units, compositor bindings, and troubleshooting. |
 | [Contributing](contributing.md) | Branch/PR workflow, coding conventions, testing expectations, and documentation updates. |
 | [IPC protocol](ipc.md) | Versioned JSON messages, commands, responses, error codes, and status snapshots. |
 | [Roadmap](roadmap.md) | Architectural sequence and the gates for larger changes such as a Rust port. |

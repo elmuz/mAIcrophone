@@ -4,13 +4,13 @@ Status: draft. Decisions marked **[proposed]** need confirmation.
 
 ## 1. Product shape
 
-Single-user, Niri-first, local dictation helper for any focused text field,
+Single-user, local dictation helper for any focused text field,
 primarily the `pi` prompt.
 
 Components:
 
 ```text
-niri hotkey
+compositor hotkey
     |
     v
 maic CLI  --Unix socket-->  maic daemon
@@ -61,14 +61,15 @@ maic CLI  --Unix socket-->  maic daemon
 ### Shortcuts
 
 Shortcuts are deliberately **not hard-coded**. The daemon exposes commands and
-the user chooses niri bindings that do not conflict with existing ones:
+the user chooses compositor bindings that do not conflict with existing ones:
 
 ```kdl
 Mod+Alt+V       { spawn "maic" "toggle"; }
 Mod+Alt+Shift+V { spawn "maic" "cancel"; }
 ```
 
-The exact keys are decided later based on the current niri config.
+The exact keys are decided later based on the current compositor config.
+Niri, Sway, and Hyprland examples are in `configuration.md`.
 
 ## 3. Process model and IPC
 
@@ -174,8 +175,8 @@ current requirement.
 Properties:
 
 - anchored bottom centre of the **focused output** at recording start,
-- output selected through the native Niri IPC socket (`FocusedOutput`, with
-  `name` + `logical` width/height),
+- output selected through the compositor backend (native Niri/Sway/Hyprland
+  IPC, with output name and logical width/height),
 - width: min(75% of output width, ~2000 px),
 - height: dynamic, grows upward from the bottom margin,
 - max height: ~30% of the output's logical height,
@@ -223,11 +224,11 @@ Decision: stay on Python + GTK4 for now. Re-evaluate under the gates in
 
 - Final text only.
 - Target locking:
-  - capture the focused window through the Niri IPC socket at record start,
+  - capture the focused window through the compositor IPC at record start,
   - the target is the window `id`, not the title,
   - the user may focus another window while dictating; that does not abort,
-  - before injection, if the target is no longer focused, send a Niri
-    `FocusWindow` IPC action to return to the original target,
+  - before injection, if the target is no longer focused, ask the compositor
+    backend to refocus the original target,
   - if the original target no longer exists, do not type; copy transcript to
     clipboard and show a notification,
   - title changes are ignored; `id`/`pid` identify the target.
@@ -254,7 +255,9 @@ Decision: stay on Python + GTK4 for now. Re-evaluate under the gates in
   - `Enemmotron` -> `Nemotron`
   - etc.
 
-Non-Niri focus detection is out of scope for v1.
+Focus detection and refocusing are implemented by the Niri, Sway, and
+Hyprland compositor backends. Other compositors require a new backend or a
+generic fallback.
 
 ## 9. Configuration
 
@@ -371,8 +374,8 @@ primary feedback surface.
 4. **Focus-change behaviour**
    - abort + clipboard (recommended), or type anyway, or ask via overlay.
 5. **MVP scope**
-   - Niri only, one monitor, explicit language by default, one final per session,
-     no history.
+   - Niri, Sway, and Hyprland; one monitor, explicit language by default, one
+     final per session, no history.
 6. **Fallback policy**
    - wtype primary; clipboard on failure/focus change (recommended).
 7. **Server lifecycle**
@@ -384,11 +387,11 @@ primary feedback surface.
 2. native audio capture -> WS -> final transcript printed to journal.
 3. Focusless GTK4 layer-shell overlay with status + VU + partial text.
 4. `wtype` final into the focused window.
-5. Niri focus guard + clipboard fallback.
-6. Systemd units + config + niri bind snippet.
+5. Compositor focus guard + clipboard fallback.
+6. Systemd units + config + compositor bind snippets.
 
-Do not add endpointing, history, non-Niri support, or native PipeWire bindings
-until this slice works end to end.
+Do not add endpointing, history, additional compositor backends, or native
+PipeWire bindings until this slice works end to end.
 
 ## 14. Contracts that deserve deeper definition
 
