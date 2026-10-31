@@ -5,8 +5,9 @@
 <h1 align="center">mAIcrophone</h1>
 
 <p align="center">
-  <em>Local, focusless push-to-talk dictation for Niri, Sway, and Hyprland,<br>
-  backed by <code>nemo-speech serve</code> and the Nemotron 3.5 streaming ASR model.</em>
+  <em>Local, focusless dictation for Niri, Sway, and Hyprland, toggled from a<br>
+  global shortcut and backed by <code>nemo-speech serve</code> and the Nemotron 3.5
+  streaming ASR model.</em>
 </p>
 
 <p align="center">
@@ -15,6 +16,7 @@
   <a href="https://github.com/astral-sh/uv"><img src="https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/uv/main/assets/badge/v0.json" alt="uv"></a>
   <a href="https://github.com/astral-sh/ruff"><img src="https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json" alt="Ruff"></a>
   <a href="https://github.com/astral-sh/ty"><img src="https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ty/main/assets/badge/v0.json" alt="ty"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-88C0D0.svg" alt="License: MIT"></a>
 </p>
 
 <p align="center">
@@ -147,5 +149,5 @@ configuration options, see [docs/configuration.md](docs/configuration.md).
 
 ## License
 
-No license has been chosen yet. Treat the repository as all rights reserved
-until a license is added.
+mAIcrophone is released under the [MIT License](LICENSE). Third-party
+dependencies keep their own licenses.
