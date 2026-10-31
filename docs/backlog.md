@@ -12,10 +12,19 @@ features and known gaps.
 - Keep the native Niri/clipboard/audio implementations covered by protocol and
   lifecycle unit tests; add real-session smoke tests when a disposable Niri or
   PipeWire session is available.
-- Manual punctuation insertion via a shortcut. The model punctuation is often
-  weak in practice, especially for questions. Consider a post-injection or
-  pre-injection command that appends/edits `.`, `,`, `?`, or `!` without
-  re-recording.
+- Manual punctuation insertion is implemented for `.` and `?` (see below).
+  Still open: a comma/exclamation mark, capitalization of the following word,
+  and reliable placement when the ASR revises the anchored sentence.
+
+## Recently landed
+
+- Manual `.` / `?` insertion via `maic punctuate` and a global shortcut.
+  While recording, the mark is anchored to the partial transcript visible in
+  the overlay and inserted into the final at that sentence boundary. When idle
+  it is typed at the cursor only if the last target window still has focus.
+  Marks are placed with a longest-common-prefix heuristic, so a late ASR
+  revision of the anchored sentence can move a mark to the end of the
+  previously matching word.
 
 ## Later
 

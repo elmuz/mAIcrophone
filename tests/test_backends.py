@@ -18,6 +18,7 @@ from maic.backends.protocols import (
 )
 from maic.config import Config, load_config
 from maic.daemon import Daemon, Session
+from maic.ipc import make_request
 
 
 class FakeCompositor:
@@ -257,6 +258,42 @@ class DaemonFakeBackendTests(unittest.TestCase):
         self.assertEqual(compositor.refocused, [])
         self.assertTrue(overlay.started)
         self.assertTrue(overlay.hidden)
+
+    def test_in_flight_punctuation_reaches_the_final_transcript(self):
+        async def scenario():
+            cfg = Config()
+            injection = FakeInjector()
+            overlay = FakeOverlay()
+            backends = Backends(
+                compositor=FakeCompositor(),
+                audio=FakeAudio(),
+                injection=injection,
+                asr=FakeAsrProvider(),
+            )
+            daemon = Daemon(cfg, backends, overlay)
+            task = asyncio.create_task(daemon._run_session(False))
+            for _ in range(200):
+                if daemon.state == "recording":
+                    break
+                await asyncio.sleep(0.01)
+            else:
+                task.cancel()
+                raise AssertionError("session never reached recording state")
+
+            # The ASR provider emits no partials, so stand in for the visible
+            # transcript the user would anchor the mark to.
+            assert daemon.session is not None
+            daemon.session.partial_text = "hello world"
+            response = await daemon.dispatch(make_request("punctuate", mark="question"))
+            assert response["ok"], response
+
+            daemon._request_stop()
+            await asyncio.wait_for(task, timeout=2)
+            return injection, overlay
+
+        injection, overlay = asyncio.run(scenario())
+        self.assertEqual(injection.typed, ["hello world?"])
+        self.assertIn("hello world?", overlay.partials)
 
     def test_audio_loop_preserves_pcm_bytes_and_asr_chunks(self):
         class SequentialAudio:

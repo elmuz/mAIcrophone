@@ -45,6 +45,11 @@ flow works end to end, with native Niri, Sway, and Hyprland compositor backends.
 - **Safe text injection** with `wtype`: the original target window is restored
   if focus moved during dictation, and the transcript can also be copied to the
   clipboard and PRIMARY selection.
+- **Manual `.` / `?` while dictating**: press a global shortcut when a sentence
+  is visible in the overlay and the mark is inserted at that point in the final
+  transcript. The shortcut is a compositor bind by design: Wayland does not let
+  an unfocused client read keys, and a bare `.`/`?` bind would swallow those
+  keys for every application.
 - **Local-first**: audio and transcripts stay on the machine unless you
   explicitly configure a remote ASR endpoint.
 

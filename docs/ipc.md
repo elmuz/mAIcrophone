@@ -48,6 +48,7 @@ Supported commands:
 | `cancel` | none | Discard the current recording without injecting text. |
 | `language` | `language` (string, optional) | With a non-empty value, set the next session's ASR language. Without one, read the current value. `auto` means model detection. |
 | `type` | `text` (string, required) | Diagnostic direct injection through the configured injector. |
+| `punctuate` | `mark` (string, required) | Attach `.` or `?` to the sentence currently being dictated. Accepts `period`, `question`, `.`, or `?`. While recording, the mark is anchored to the visible partial and inserted into the final transcript at stop; when idle it is typed at the cursor only if the last target window still has focus. |
 
 Examples:
 
@@ -56,6 +57,7 @@ Examples:
 {"protocol": 1, "command": "language", "language": "it-IT"}
 {"protocol": 1, "command": "language"}
 {"protocol": 1, "command": "type", "text": "hello"}
+{"protocol": 1, "command": "punctuate", "mark": "period"}
 ```
 
 ## Responses
@@ -69,7 +71,9 @@ responses add command-specific fields:
 ```
 
 `status` returns the snapshot documented below. `type` returns
-`{"ok": true, "state": "<current state>"}` on success.
+`{"ok": true, "state": "<current state>"}` on success. `punctuate` adds a
+`marks` count while a session is active, e.g.
+`{"ok": true, "state": "recording", "marks": 1}`.
 
 ### Errors
 

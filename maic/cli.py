@@ -169,6 +169,10 @@ def build_parser() -> argparse.ArgumentParser:
     language_cmd.add_argument("code", nargs="?", help="e.g. en-US, it-IT, auto")
     type_cmd = sub.add_parser("type", help="type text via the daemon (diagnostic)")
     type_cmd.add_argument("text")
+    punctuate = sub.add_parser(
+        "punctuate", help="attach . or ? to the sentence currently being dictated"
+    )
+    punctuate.add_argument("mark", help="period, question, . or ?")
 
     return parser
 
@@ -191,6 +195,8 @@ def main(argv: list[str] | None = None) -> int:
             response = _request("language", language=args.code or "")
         elif args.command == "type":
             response = _request("type", text=args.text)
+        elif args.command == "punctuate":
+            response = _request("punctuate", mark=args.mark)
         else:
             response = _request(args.command)
     except FileNotFoundError:

@@ -2,3 +2,5 @@
 // Example only:
 Mod+Alt+V       { spawn "maic" "toggle"; }
 Mod+Alt+Shift+V { spawn "maic" "cancel"; }
+Mod+Alt+Period       { spawn "maic" "punctuate" "period"; }
+Mod+Alt+Shift+Period { spawn "maic" "punctuate" "question"; }

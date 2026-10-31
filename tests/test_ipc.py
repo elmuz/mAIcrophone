@@ -12,9 +12,11 @@ from maic.backends.protocols import (
     Backends,
     CompositorCapabilities,
     InjectionCapabilities,
+    OutputInfo,
+    TargetWindow,
 )
 from maic.config import Config
-from maic.daemon import Daemon, State, socket_path
+from maic.daemon import Daemon, Session, State, socket_path
 from maic.ipc import (
     PROTOCOL_VERSION,
     IpcProtocolError,
@@ -88,12 +90,13 @@ class FakeInjector:
 class FakeOverlay:
     def __init__(self):
         self.languages: list[str] = []
+        self.partials: list[str] = []
 
     def start(self, output):
         pass
 
     def set_partial(self, text):
-        pass
+        self.partials.append(text)
 
     def set_level(self, rms):
         pass
@@ -237,6 +240,46 @@ class DaemonDispatchTests(unittest.TestCase):
         response = asyncio.run(daemon.dispatch(make_request("type", text="  hello\nworld  ")))
         self.assertTrue(response["ok"])
         self.assertEqual(injection.typed, ["hello world"])
+
+    def test_punctuate_rejects_unknown_mark(self):
+        daemon, injection, _ = make_daemon()
+        response = asyncio.run(daemon.dispatch(make_request("punctuate", mark="comma")))
+        self.assertFalse(response["ok"])
+        self.assertEqual(response["code"], "invalid_argument")
+        self.assertEqual(injection.typed, [])
+
+    def test_punctuate_anchors_mark_to_current_partial(self):
+        daemon, injection, overlay = make_daemon()
+        daemon.state = State.RECORDING
+        daemon.session = Session(
+            target=TargetWindow(id=42, pid=7, app_id="test", title="Editor"),
+            output=OutputInfo(name="TEST-1", width=1920, height=1080),
+            partial_text="hello world",
+        )
+        response = asyncio.run(daemon.dispatch(make_request("punctuate", mark="period")))
+        self.assertTrue(response["ok"])
+        self.assertEqual(response["marks"], 1)
+        self.assertEqual(overlay.partials[-1], "hello world.")
+        self.assertEqual(injection.typed, [])
+
+    def test_punctuate_requires_transcribed_text(self):
+        daemon, _, _ = make_daemon()
+        daemon.state = State.RECORDING
+        daemon.session = Session(
+            target=TargetWindow(id=42, pid=7, app_id="test", title="Editor"),
+            output=OutputInfo(name="TEST-1", width=1920, height=1080),
+        )
+        response = asyncio.run(daemon.dispatch(make_request("punctuate", mark="question")))
+        self.assertFalse(response["ok"])
+        self.assertEqual(response["code"], "invalid_argument")
+
+    def test_punctuate_when_idle_does_not_steal_focus(self):
+        daemon, injection, _ = make_daemon()
+        daemon.last_target = TargetWindow(id=42, pid=7, app_id="test", title="Editor")
+        response = asyncio.run(daemon.dispatch(make_request("punctuate", mark="period")))
+        self.assertFalse(response["ok"])
+        self.assertEqual(response["code"], "invalid_argument")
+        self.assertEqual(injection.typed, [])
 
     def test_ipc_handler_reports_invalid_json(self):
         async def scenario():

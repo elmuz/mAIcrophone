@@ -28,6 +28,7 @@ from .ipc import (
     ok,
     validate_request,
 )
+from .marks import Mark, apply_marks, mark_char
 from .subprocess_env import child_env
 from .text import normalize_text
 
@@ -68,6 +69,9 @@ class Session:
     error_event: asyncio.Event = field(default_factory=asyncio.Event)
     committed_event: asyncio.Event = field(default_factory=asyncio.Event)
     error_message: str = ""
+    partial_text: str = ""
+    final_text: str = ""
+    marks: list[Mark] = field(default_factory=list)
 
 
 class Daemon:
@@ -77,6 +81,7 @@ class Daemon:
         self.overlay = overlay
         self.state = State.IDLE
         self.session: Session | None = None
+        self.last_target: TargetWindow | None = None
         self.loop = asyncio.new_event_loop()
         self.thread = threading.Thread(target=self._run_loop, name="maic-asyncio", daemon=True)
         self.ipc_server: asyncio.AbstractServer | None = None
@@ -92,6 +97,7 @@ class Daemon:
             "stop": self._cmd_stop,
             "cancel": self._cmd_cancel,
             "type": self._cmd_type,
+            "punctuate": self._cmd_punctuate,
         }
 
     def _run_loop(self) -> None:
@@ -215,7 +221,8 @@ class Daemon:
                     "pid": target.pid,
                     "app_id": target.app_id,
                     "title": target.title,
-                }
+                },
+                "marks": len(self.session.marks),
             }
 
         return {
@@ -275,6 +282,40 @@ class Daemon:
         text = normalize_text(value, self.cfg)
         injected = await self.backends.injection.type_text(text)
         if not injected:
+            return error("text injection failed", "injection_failed")
+        return ok(state=self.state)
+
+    async def _cmd_punctuate(self, request: dict) -> dict:
+        """Attach ``.``/``?`` to the sentence visible in the overlay.
+
+        While recording, the mark is anchored to the current partial and woven
+        into the final transcript at stop. When no session is active it is
+        typed at the cursor, but only if the last target still has focus so a
+        global shortcut cannot inject into an unrelated window.
+        """
+        name = request.get("mark")
+        if not isinstance(name, str):
+            return error("mark must be a string", "invalid_argument")
+        char = mark_char(name)
+        if char is None:
+            return error(f"unknown mark: {name}", "invalid_argument")
+
+        session = self.session
+        if session is not None and self.state in {State.STARTING, State.RECORDING}:
+            if not session.partial_text.strip():
+                return error("no transcript yet", "invalid_argument")
+            session.marks.append(Mark(session.partial_text, char))
+            self._render_transcript(session.partial_text, session.marks, final=False)
+            log.info("mark %r anchored to partial transcript", char)
+            return ok(state=self.state, marks=len(session.marks))
+
+        target = self.last_target
+        if target is None or self.state != State.IDLE:
+            return error("no active session", "invalid_argument")
+        focused = await self.backends.compositor.current_focused_id()
+        if focused != target.id:
+            return error("target window is not focused", "invalid_argument")
+        if not await self.backends.injection.type_text(char):
             return error("text injection failed", "injection_failed")
         return ok(state=self.state)
 
@@ -353,6 +394,7 @@ class Daemon:
                 return
 
             log.info("recording target window %s (%s)", target.id, target.app_id)
+            self.last_target = target
             session = Session(target=target, output=output)
             self.session = session
             self.overlay.set_state("CONNECT")
@@ -406,7 +448,7 @@ class Daemon:
                 raise RuntimeError("ASR did not return a final transcript")
             log.debug("final transcript: %r", final)
 
-            text = normalize_text(final, self.cfg)
+            text = normalize_text(apply_marks(final, session.marks), self.cfg)
             if not text:
                 self.overlay.show_error("empty transcript")
                 return
@@ -496,19 +538,26 @@ class Daemon:
             await asyncio.sleep(0.05)
         return False
 
-    def _on_asr_event(self, session: Session, event: AsrEvent) -> None:
-        if event.kind == "partial":
-            # Partial support is optional; batch engines go straight to final.
-            if self.backends.asr.capabilities.supports_partials:
-                self.overlay.set_partial(event.text)
-        elif event.kind == "final":
+    def _render_transcript(self, text: str, marks: list[Mark], *, final: bool) -> None:
+        shown = apply_marks(text, marks)
+        if final:
             set_final = getattr(self.overlay, "set_final", None)
             if callable(set_final):
-                set_final(event.text)
+                set_final(shown)
             else:
                 # Backwards compatibility with overlay implementations that
                 # predate the final/partial distinction.
-                self.overlay.set_partial(event.text)
+                self.overlay.set_partial(shown)
+        elif self.backends.asr.capabilities.supports_partials:
+            self.overlay.set_partial(shown)
+
+    def _on_asr_event(self, session: Session, event: AsrEvent) -> None:
+        if event.kind == "partial":
+            session.partial_text = event.text
+            self._render_transcript(event.text, session.marks, final=False)
+        elif event.kind == "final":
+            session.final_text = event.text
+            self._render_transcript(event.text, session.marks, final=True)
         elif event.kind == "committed":
             session.committed_event.set()
         elif event.kind == "error":

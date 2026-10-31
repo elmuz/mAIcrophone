@@ -249,6 +249,17 @@ Decision: stay on Python + GTK4 for now. Re-evaluate under the gates in
   - `shift-enter` is the intended long-term default for chat prompts.
 - No length-based clipboard threshold yet; the final text always goes through
   `wtype` first, with clipboard fallback when injection is impossible.
+- Manual punctuation (`maic punctuate period|question`): while recording, a
+  mark is anchored to the partial transcript visible when the shortcut was
+  pressed and inserted into the final at that boundary using a
+  longest-common-prefix heuristic. Only `.` and `?` are supported; there is no
+  automatic capitalization. When idle, the mark is typed at the cursor only if
+  the last target window still has focus.
+- The shortcut must be a compositor bind, not a key handled by mAIcrophone.
+  Wayland routes keys only to the focused surface; the overlay is intentionally
+  focusless and the target app keeps focus during dictation. A bare `.`/`?`
+  global bind is not viable because it would consume those keys in every
+  application. Layer-shell keyboard grabs would defeat the focusless design.
 - Post-ASR replacement table for code terms:
   - `Pipewire` -> `PipeWire`
   - `System D` -> `systemd`
