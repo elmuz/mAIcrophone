@@ -101,7 +101,11 @@ class Overlay:
         self._previous_partial = ""
         self._levels: deque[float] = deque([0.0] * 15, maxlen=15)
         self._wave_current = [0.0] * 15
-        self._wave_source: int | None = None
+        self._wave_tick_id: int | None = None
+        self._wave_last_frame_us: int = 0
+        self._level_queue: deque[float] = deque(maxlen=240)
+        self._level_timer_id: int | None = None
+        self._level_interval_ms = 16
         self._state = "idle"
         self.language = language_label(cfg.language)
         self.server_status = "checking"
@@ -460,14 +464,36 @@ scrollbar {{
         cr.arc(cx, cy, 4.5, 0, 2 * math.pi)
         cr.fill()
 
-    def _animate_waveform(self) -> bool:
+    def _stop_wave_animation(self) -> None:
+        if self._wave_tick_id is not None and self.waveform is not None:
+            self.waveform.remove_tick_callback(self._wave_tick_id)
+        self._wave_tick_id = None
+        self._wave_last_frame_us = 0
+        if self._level_timer_id is not None:
+            GLib.source_remove(self._level_timer_id)
+        self._level_timer_id = None
+        self._level_queue.clear()
+
+    def _animate_waveform(self, area, frame_clock) -> bool:
+        """Frame-clock driven easing; called on every compositor frame."""
+        now_us = frame_clock.get_frame_time()
+        if self._wave_last_frame_us:
+            # Clamp dt (ms) to survive long pauses (occlusion, suspend, ...).
+            dt_ms = max(0.0, min(100.0, (now_us - self._wave_last_frame_us) / 1000.0))
+        else:
+            dt_ms = 16.7
+        self._wave_last_frame_us = now_us
         if not self.window or not self.window.get_visible():
-            self._wave_source = None
+            self._wave_tick_id = None
+            self._wave_last_frame_us = 0
             return GLib.SOURCE_REMOVE
+        # Match the old per-16.7ms-tick factor of 0.45 with a time-based
+        # exponential smoothing so speed is independent of frame rate.
+        easing = 1.0 - math.exp(-dt_ms / 27.9)
         for i, target in enumerate(self._levels):
             current = self._wave_current[i]
             delta = target - current
-            self._wave_current[i] = target if abs(delta) < 0.005 else current + delta * 0.45
+            self._wave_current[i] = target if abs(delta) < 0.005 else current + delta * easing
         if self.waveform is not None:
             self.waveform.queue_draw()
         return GLib.SOURCE_CONTINUE
@@ -545,8 +571,12 @@ scrollbar {{
         self._previous_partial = ""
         self._levels = deque([0.0] * 15, maxlen=15)
         self._wave_current = [0.0] * 15
-        if self._wave_source is None:
-            self._wave_source = GLib.timeout_add(16, self._animate_waveform)
+        if self._level_timer_id is not None:
+            GLib.source_remove(self._level_timer_id)
+            self._level_timer_id = None
+        self._level_queue.clear()
+        if self._wave_tick_id is None and self.waveform is not None:
+            self._wave_tick_id = self.waveform.add_tick_callback(self._animate_waveform)
         self._refresh_status()
         self._apply_text("")
         self.window.set_visible(True)
@@ -578,28 +608,43 @@ scrollbar {{
 
     def set_level(self, rms: float) -> None:
         self._last_rms = rms
-        GLib.idle_add(self._update_level, rms)
+        self.set_levels([rms], interval_ms=16)
 
     def set_levels(self, levels: list[float], interval_ms: int = 25) -> None:
-        """Feed several meter samples spread over one audio chunk."""
+        """Queue meter samples and consume them at a steady display cadence.
+
+        Audio capture can deliver samples in uneven bursts. A single paced
+        queue prevents overlapping GLib timers from shifting several bars at
+        once and then freezing until the next audio chunk arrives.
+        """
         if levels:
-            GLib.idle_add(self._schedule_levels, list(levels), max(1, interval_ms))
+            GLib.idle_add(self._enqueue_levels, list(levels), max(1, interval_ms))
 
-    def _schedule_levels(self, levels: list[float], interval_ms: int) -> bool:
-        for offset, level in enumerate(levels):
-            GLib.timeout_add(offset * interval_ms, self._push_level, level)
-        return False
-
-    def _push_level(self, rms: float) -> bool:
-        if self.window and self.window.get_visible():
-            self._levels.append(meter_level(rms))
-        return GLib.SOURCE_REMOVE
-
-    def _update_level(self, rms: float) -> bool:
+    def _enqueue_levels(self, levels: list[float], interval_ms: int) -> bool:
         if not self.window or not self.window.get_visible():
             return False
-        self._levels.append(meter_level(rms))
+        self._level_queue.extend(meter_level(level) for level in levels)
+        self._level_interval_ms = interval_ms
+        if self._level_timer_id is None:
+            self._level_timer_id = GLib.timeout_add(
+                self._level_interval_ms, self._drain_level_queue
+            )
         return False
+
+    def _drain_level_queue(self) -> bool:
+        if not self.window or not self.window.get_visible():
+            self._level_timer_id = None
+            self._level_queue.clear()
+            return GLib.SOURCE_REMOVE
+        if self._level_queue:
+            self._levels.append(self._level_queue.popleft())
+        if self._level_queue:
+            self._level_timer_id = GLib.timeout_add(
+                self._level_interval_ms, self._drain_level_queue
+            )
+        else:
+            self._level_timer_id = None
+        return GLib.SOURCE_REMOVE
 
     def set_state(self, state: str) -> None:
         self._state = state
@@ -655,9 +700,7 @@ scrollbar {{
         GLib.idle_add(self._hide_ui)
 
     def _hide_ui(self) -> bool:
-        if self._wave_source is not None:
-            GLib.source_remove(self._wave_source)
-            self._wave_source = None
+        self._stop_wave_animation()
         if self.window is not None:
             self.window.set_visible(False)
         return False
@@ -666,9 +709,7 @@ scrollbar {{
         GLib.idle_add(self._destroy_ui)
 
     def _destroy_ui(self) -> bool:
-        if self._wave_source is not None:
-            GLib.source_remove(self._wave_source)
-            self._wave_source = None
+        self._stop_wave_animation()
         if self.window is not None:
             self.window.destroy()
             self.window = None

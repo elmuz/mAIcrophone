@@ -34,6 +34,16 @@ class _PaSampleSpec(ctypes.Structure):
     ]
 
 
+class _PaBufferAttr(ctypes.Structure):
+    _fields_ = [
+        ("maxlength", ctypes.c_uint32),
+        ("tlength", ctypes.c_uint32),
+        ("prebuf", ctypes.c_uint32),
+        ("minreq", ctypes.c_uint32),
+        ("fragsize", ctypes.c_uint32),
+    ]
+
+
 class _PulseSimple:
     def __init__(self) -> None:
         simple = ctypes.CDLL("libpulse-simple.so.0")
@@ -47,7 +57,7 @@ class _PulseSimple:
             ctypes.c_char_p,  # stream name
             ctypes.POINTER(_PaSampleSpec),
             ctypes.c_void_p,  # channel map
-            ctypes.c_void_p,  # buffer attributes
+            ctypes.POINTER(_PaBufferAttr),  # buffer attributes
             ctypes.POINTER(ctypes.c_int),  # error
         ]
         simple.pa_simple_new.restype = ctypes.c_void_p
@@ -81,6 +91,7 @@ class PulseAudioCapture:
         self._api: _PulseSimple | None = None
         self._stream: int | None = None
         self._queue: queue.Queue[bytes | None] | None = None
+        self._pending = bytearray()
         self._stop = threading.Event()
         self._reader: threading.Thread | None = None
         self._error: str | None = None
@@ -103,6 +114,11 @@ class PulseAudioCapture:
             rate=self.cfg.sample_rate,
             channels=1,
         )
+        # The simple API's default recording buffer can be several seconds on
+        # PipeWire. Request a short fragment so pa_simple_read() returns in
+        # ~20 ms steps instead of dumping multi-second bursts.
+        fragsize = max(2, int(self.cfg.sample_rate * 2 * 0.02))
+        attr = _PaBufferAttr(0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, fragsize)
         error = ctypes.c_int(0)
         stream = api.simple.pa_simple_new(
             None,
@@ -112,24 +128,27 @@ class PulseAudioCapture:
             b"dictation",
             ctypes.byref(spec),
             None,
-            None,
+            ctypes.byref(attr),
             ctypes.byref(error),
         )
         if not stream:
             raise RuntimeError(f"cannot open PulseAudio source: {api.error_text(error.value)}")
         self._api = api
         self._stream = stream
-        self._queue = queue.Queue(maxsize=64)
+        self._pending = bytearray()
+        # Keep the same worst-case buffering as the old 64 x chunk_ms queue:
+        # the reader now queues 10 ms frames instead of aggregated chunks.
+        queue_size = max(64, int(64 * self.cfg.chunk_ms / 10))
+        self._queue = queue.Queue(maxsize=queue_size)
 
     def _read_loop(self) -> None:
         assert self._api is not None
         assert self._stream is not None
         assert self._queue is not None
-        chunk_bytes = self.cfg.chunk_bytes
         # Read in short frames so stop() is not stuck behind a large blocking
-        # pa_simple_read(). Outgoing chunks keep the configured size.
-        read_bytes = min(chunk_bytes, max(2, int(self.cfg.sample_rate * 2 * 0.01)))
-        pending = bytearray()
+        # pa_simple_read(). read_chunk() aggregates them for the ASR stream and
+        # also lets the overlay consume fresh meter samples at a higher rate.
+        read_bytes = max(2, int(self.cfg.sample_rate * 2 * 0.01))
         error = ctypes.c_int(0)
         while not self._stop.is_set():
             buffer = ctypes.create_string_buffer(read_bytes)
@@ -139,10 +158,7 @@ class PulseAudioCapture:
             if rc < 0:
                 self._error = self._api.error_text(error.value)
                 break
-            pending.extend(buffer.raw)
-            while len(pending) >= chunk_bytes:
-                self._put(bytes(pending[:chunk_bytes]))
-                del pending[:chunk_bytes]
+            self._put(bytes(buffer.raw))
         self._put(None)
 
     def _put(self, data: bytes | None) -> None:
@@ -160,16 +176,24 @@ class PulseAudioCapture:
             except queue.Full:
                 pass
 
-    async def read_chunk(self) -> bytes:
+    async def read_chunk(self, max_bytes: int | None = None) -> bytes:
         if self._queue is None:
             return b""
+        limit = self.cfg.chunk_bytes if max_bytes is None else max(2, max_bytes)
         loop = asyncio.get_running_loop()
-        data = await loop.run_in_executor(None, self._queue.get)
-        if data is None:
-            if self._error:
-                raise RuntimeError(self._error)
-            return b""
-        return data
+        data = bytearray()
+        while len(data) < limit:
+            if not self._pending:
+                incoming = await loop.run_in_executor(None, self._queue.get)
+                if incoming is None:
+                    if self._error:
+                        raise RuntimeError(self._error)
+                    break
+                self._pending.extend(incoming)
+            take = min(limit - len(data), len(self._pending))
+            data.extend(self._pending[:take])
+            del self._pending[:take]
+        return bytes(data)
 
     async def stop(self) -> None:
         self._stop.set()

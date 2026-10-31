@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import math
+import shutil
 import struct
 
 from ..config import Config
@@ -15,6 +16,7 @@ class PwRecordAudioCapture:
     def __init__(self, cfg: Config):
         self.cfg = cfg
         self.proc: asyncio.subprocess.Process | None = None
+        self._pending = bytearray()
 
     @property
     def capabilities(self) -> AudioCapabilities:
@@ -34,6 +36,13 @@ class PwRecordAudioCapture:
         if self.cfg.audio_source:
             args += ["--target", self.cfg.audio_source]
         args.append("-")
+        self._pending.clear()
+        # pw-record writes stdout through C stdio. On a pipe it buffers in
+        # 4096-byte blocks (128 ms at 16 kHz mono s16), which makes the level
+        # meter arrive in big, irregular bursts. Force unbuffered writes so
+        # callers get the PipeWire quantum (about 5-20 ms) instead.
+        if shutil.which("stdbuf"):
+            args = ["stdbuf", "-o0", *args]
         self.proc = await asyncio.create_subprocess_exec(
             *args,
             stdout=asyncio.subprocess.PIPE,
@@ -41,10 +50,18 @@ class PwRecordAudioCapture:
             env=child_env(),
         )
 
-    async def read_chunk(self) -> bytes:
+    async def read_chunk(self, max_bytes: int | None = None) -> bytes:
         if not self.proc or not self.proc.stdout:
             return b""
-        return await self.proc.stdout.read(self.cfg.chunk_bytes)
+        limit = self.cfg.chunk_bytes if max_bytes is None else max(2, max_bytes)
+        while len(self._pending) < limit:
+            data = await self.proc.stdout.read(limit - len(self._pending))
+            if not data:
+                break
+            self._pending.extend(data)
+        data = bytes(self._pending[:limit])
+        del self._pending[:limit]
+        return data
 
     async def stop(self) -> None:
         if not self.proc:

@@ -49,7 +49,7 @@ class FakeAudio:
     async def start(self) -> None:
         pass
 
-    async def read_chunk(self) -> bytes:
+    async def read_chunk(self, max_bytes: int | None = None) -> bytes:
         return b""
 
     async def stop(self) -> None:

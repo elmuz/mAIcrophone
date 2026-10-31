@@ -481,28 +481,53 @@ class Daemon:
             session.error_event.set()
 
     @staticmethod
-    def _meter_levels(audio: AudioCapture, data: bytes, count: int = 4) -> list[float]:
-        """Split one ASR chunk into finer meter samples for a lively waveform."""
+    def _meter_levels(
+        audio: AudioCapture, data: bytes, target_ms: float = 1000.0 / 60.0
+    ) -> tuple[list[float], int]:
+        """Split captured audio into meter samples paced at about 60 Hz."""
         if len(data) < 2:
-            return []
-        # Keep every slice on an s16 sample boundary.
-        step = max(2, (len(data) // count // 2) * 2)
-        return [audio.level(data[i : i + step]) for i in range(0, len(data), step)]
+            return [], 0
+        channels = max(1, audio.capabilities.channels)
+        frame_bytes = 2 * channels
+        frames = len(data) // frame_bytes
+        if frames == 0:
+            return [], 0
+        duration_ms = frames / audio.capabilities.sample_rate * 1000.0
+        count = max(1, min(frames, round(duration_ms / target_ms)))
+        levels = []
+        for i in range(count):
+            start = round(i * frames / count) * frame_bytes
+            end = round((i + 1) * frames / count) * frame_bytes
+            levels.append(audio.level(data[start:end]))
+        interval = max(1, round(duration_ms / count))
+        return levels, interval
 
     async def _audio_loop(self, audio: AudioCapture, asr: AsrSession, session: Session) -> None:
+        bytes_per_second = audio.capabilities.sample_rate * 2 * max(
+            1, audio.capabilities.channels
+        )
+        # Capture in small blocks so the waveform gets fresh samples at roughly
+        # frame rate. Accumulate them into the configured ASR chunk size below.
+        meter_bytes = max(2, int(bytes_per_second * 0.02))
+        chunk_bytes = max(2, int(bytes_per_second * self.cfg.chunk_ms / 1000))
+        pending = bytearray()
         try:
             while not session.stop_event.is_set() and not session.cancel_event.is_set():
-                data = await audio.read_chunk()
+                data = await audio.read_chunk(meter_bytes)
                 if not data:
                     break
-                levels = self._meter_levels(audio, data)
+                pending.extend(data)
+                levels, interval = self._meter_levels(audio, data)
                 set_levels = getattr(self.overlay, "set_levels", None)
                 if callable(set_levels) and levels:
-                    interval = max(5, self.cfg.chunk_ms // len(levels))
                     set_levels(levels, interval)
-                else:
-                    self.overlay.set_level(max(levels) if levels else 0.0)
-                await asr.send_audio(data)
+                elif levels:
+                    self.overlay.set_level(max(levels))
+                while len(pending) >= chunk_bytes:
+                    await asr.send_audio(bytes(pending[:chunk_bytes]))
+                    del pending[:chunk_bytes]
+            if pending and not session.cancel_event.is_set():
+                await asr.send_audio(bytes(pending))
         except asyncio.CancelledError:
             raise
         except Exception as exc:

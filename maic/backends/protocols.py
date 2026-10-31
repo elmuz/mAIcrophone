@@ -142,7 +142,12 @@ class AudioCapture(Protocol):
 
     async def start(self) -> None: ...
 
-    async def read_chunk(self) -> bytes: ...
+    async def read_chunk(self, max_bytes: int | None = None) -> bytes:
+        """Return captured audio, at most ``max_bytes`` when supplied.
+
+        Implementations may return less than the requested amount. Callers that
+        need the configured ASR chunk size should accumulate the returned data.
+        """
 
     async def stop(self) -> None: ...
 

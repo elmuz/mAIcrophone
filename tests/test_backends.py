@@ -17,7 +17,7 @@ from maic.backends.protocols import (
     TargetWindow,
 )
 from maic.config import Config, load_config
-from maic.daemon import Daemon
+from maic.daemon import Daemon, Session
 
 
 class FakeCompositor:
@@ -57,7 +57,7 @@ class FakeAudio:
     async def start(self) -> None:
         self.started = True
 
-    async def read_chunk(self) -> bytes:
+    async def read_chunk(self, max_bytes: int | None = None) -> bytes:
         await asyncio.sleep(0.01)
         return b"\x00\x00"
 
@@ -257,6 +257,63 @@ class DaemonFakeBackendTests(unittest.TestCase):
         self.assertEqual(compositor.refocused, [])
         self.assertTrue(overlay.started)
         self.assertTrue(overlay.hidden)
+
+    def test_audio_loop_preserves_pcm_bytes_and_asr_chunks(self):
+        class SequentialAudio:
+            capabilities = AudioCapabilities(sample_rate=16000, channels=1)
+
+            def __init__(self, data: bytes):
+                self.data = data
+                self.pos = 0
+
+            async def read_chunk(self, max_bytes: int | None = None) -> bytes:
+                size = max_bytes or 3200
+                chunk = self.data[self.pos : self.pos + size]
+                self.pos += len(chunk)
+                return chunk
+
+            def level(self, data: bytes) -> float:
+                return 0.0
+
+        class RecordingAsr:
+            capabilities = AsrCapabilities()
+
+            def __init__(self):
+                self.audio: list[bytes] = []
+
+            async def send_audio(self, data: bytes) -> None:
+                self.audio.append(data)
+
+        class IgnoringOverlay:
+            def set_levels(self, levels, interval_ms=25):
+                pass
+
+            def set_level(self, rms):
+                pass
+
+        async def scenario():
+            source = bytes((i * 7) % 256 for i in range(6401))
+            audio = SequentialAudio(source)
+            asr = RecordingAsr()
+            cfg = Config()
+            backends = Backends(
+                compositor=None,
+                audio=audio,
+                injection=None,
+                asr=None,
+            )
+            daemon = Daemon(cfg, backends, IgnoringOverlay())
+            session = Session(
+                target=TargetWindow(1, 1, "test", "test"),
+                output=OutputInfo("TEST-1", 1920, 1080),
+            )
+            await daemon._audio_loop(audio, asr, session)
+            return cfg, source, asr.audio
+
+        cfg, source, sent = asyncio.run(scenario())
+        self.assertEqual(b"".join(sent), source)
+        self.assertTrue(all(len(chunk) == cfg.chunk_bytes for chunk in sent[:-1]))
+        self.assertGreater(len(sent[-1]), 0)
 
     def test_session_loop_accepts_non_streaming_asr(self):
         caps = AsrCapabilities(
