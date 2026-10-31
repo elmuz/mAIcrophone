@@ -37,6 +37,34 @@ jobs:
       - name: Type-check
         run: uv run --no-sync ty check
 
+  compositor-smoke:
+    name: Compositor smoke (Sway, Niri)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Run headless compositor smoke tests
+        run: |
+          set -euxo pipefail
+          chmod -R a+rX "$GITHUB_WORKSPACE"
+          docker run --rm --init --cap-add SYS_NICE --shm-size=1g \
+            -e PYTHONDONTWRITEBYTECODE=1 \
+            -v "$GITHUB_WORKSPACE:/src:ro" \
+            -w /src \
+            archlinux:latest \
+            bash -lc '
+              set -euxo pipefail
+              pacman -Syu --noconfirm --needed \
+                bash coreutils shadow util-linux \
+                python python-gobject python-cairo gtk4 ttf-dejavu \
+                sway niri mesa libglvnd
+              useradd -m tester
+              runuser -u tester -- env PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=/src \
+                python /src/tests/integration/compositor_smoke.py sway niri
+            '
+
   test:
     name: Tests (Python ${{ matrix.python-version }})
     runs-on: ubuntu-latest
