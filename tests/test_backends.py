@@ -266,11 +266,17 @@ class DaemonFakeBackendTests(unittest.TestCase):
                 self.data = data
                 self.pos = 0
 
+            async def start(self) -> None:
+                pass
+
             async def read_chunk(self, max_bytes: int | None = None) -> bytes:
                 size = max_bytes or 3200
                 chunk = self.data[self.pos : self.pos + size]
                 self.pos += len(chunk)
                 return chunk
+
+            async def stop(self) -> None:
+                pass
 
             def level(self, data: bytes) -> float:
                 return 0.0
@@ -281,8 +287,20 @@ class DaemonFakeBackendTests(unittest.TestCase):
             def __init__(self):
                 self.audio: list[bytes] = []
 
+            async def connect(self) -> None:
+                pass
+
             async def send_audio(self, data: bytes) -> None:
                 self.audio.append(data)
+
+            async def commit(self, timeout: float = 6.0) -> str | None:
+                return None
+
+            async def cancel(self) -> None:
+                pass
+
+            async def close(self) -> None:
+                pass
 
         class IgnoringOverlay:
             def set_levels(self, levels, interval_ms=25):
@@ -297,10 +315,10 @@ class DaemonFakeBackendTests(unittest.TestCase):
             asr = RecordingAsr()
             cfg = Config()
             backends = Backends(
-                compositor=None,
+                compositor=FakeCompositor(),
                 audio=audio,
-                injection=None,
-                asr=None,
+                injection=FakeInjector(),
+                asr=FakeAsrProvider(),
             )
             daemon = Daemon(cfg, backends, IgnoringOverlay())
             session = Session(
