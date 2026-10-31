@@ -26,8 +26,8 @@ stops recording; live text appears in an overlay that never steals keyboard
 focus, and the final transcript is typed into the window that was focused when
 recording started.
 
-**Status:** first public release (`0.1.0`). The core recording → ASR → overlay →
-injection flow works end to end. Missing features are tracked in
+**Status:** current release (`0.2.0`). The recording → ASR → overlay → injection
+flow works end to end, with native Niri, Sway, and Hyprland compositor backends. Missing features are tracked in
 [docs/backlog.md](docs/backlog.md).
 
 ## Main features

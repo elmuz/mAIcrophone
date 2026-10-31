@@ -111,7 +111,7 @@ The CLI prints the `error` text and exits non-zero for any failed response.
   "server_ready": true,
   "server_status": "online",
   "overlay": true,
-  "version": "0.1.0",
+  "version": "0.2.0",
   "session": null
 }
 ```
