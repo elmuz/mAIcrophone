@@ -71,9 +71,8 @@ max_width_px = 1000
 max_height_percent = 30
 margin_px = 56
 font = "FiraCode Nerd Font Mono 13"
-max_lines = 10
-min_font_size = 11
-font_steps = 3
+initial_lines = 2
+max_lines = 8
 corner_radius = 16
 border_width = 3
 background_opacity = 0.93
@@ -203,7 +202,9 @@ The overlay is focusless, anchored to the bottom centre of the focused output,
 and grows upward up to `max_height_percent` of the monitor. It shows state, a
 coloured VU meter, language, server status, and the evolving transcript. See
 [architecture.md](architecture.md#7-overlay) for the layout and long-text
-policy.
+policy. The transcript font size is fixed by `font`. The overlay starts with
+`initial_lines` text rows, grows up to `max_lines`, then auto-scrolls while
+keeping the newest rows visible.
 
 Overlay colors live in the optional `[overlay.colors]` table. Values must be
 CSS hex colors (`#RGB`, `#RGBA`, `#RRGGBB`, or `#RRGGBBAA`).

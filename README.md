@@ -155,8 +155,9 @@ configuration options, see [docs/configuration.md](docs/configuration.md).
   Wayland compositors need a compositor backend or a generic fallback.
 - The overlay does not accept input; language and cancel actions are global
   shortcuts.
-- The overlay caps its height, auto-scrolls long transcripts, and has no manual
-  scrolling.
+- The overlay keeps a fixed transcript font size, grows from a compact initial
+  height up to a line cap, then auto-scrolls long transcripts; there is no
+  manual scrolling.
 - No endpointing, transcript history, or spoken punctuation. Manual `.` and
   `?` insertion is available through the compositor shortcuts above.
 - Partial text is best-effort; the final transcript is authoritative.

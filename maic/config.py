@@ -43,9 +43,8 @@ class Config:
     overlay_max_height_percent: int = 30
     overlay_margin_px: int = 56
     overlay_font: str = "FiraCode Nerd Font Mono 13"
-    overlay_max_lines: int = 10
-    overlay_min_font_size: int = 11
-    overlay_font_steps: int = 3
+    overlay_initial_lines: int = 2
+    overlay_max_lines: int = 8
     overlay_corner_radius: int = 16
     overlay_border_width: int = 3
     overlay_background_opacity: float = 0.93
@@ -152,9 +151,8 @@ def load_config(path: Path | None = None) -> Config:
     )
     cfg.overlay_margin_px = int(overlay.get("margin_px", cfg.overlay_margin_px))
     cfg.overlay_font = str(overlay.get("font", cfg.overlay_font))
+    cfg.overlay_initial_lines = int(overlay.get("initial_lines", cfg.overlay_initial_lines))
     cfg.overlay_max_lines = int(overlay.get("max_lines", cfg.overlay_max_lines))
-    cfg.overlay_min_font_size = int(overlay.get("min_font_size", cfg.overlay_min_font_size))
-    cfg.overlay_font_steps = int(overlay.get("font_steps", cfg.overlay_font_steps))
     cfg.overlay_corner_radius = int(overlay.get("corner_radius", cfg.overlay_corner_radius))
     cfg.overlay_border_width = int(overlay.get("border_width", cfg.overlay_border_width))
     cfg.overlay_background_opacity = float(
@@ -245,12 +243,12 @@ def load_config(path: Path | None = None) -> Config:
         raise ValueError("audio.chunk_ms must be between 20 and 1000")
     if not 1 <= cfg.server_poll_seconds <= 60:
         raise ValueError("server.poll_seconds must be between 1 and 60")
+    if not 1 <= cfg.overlay_initial_lines <= 50:
+        raise ValueError("overlay.initial_lines must be between 1 and 50")
     if not 1 <= cfg.overlay_max_lines <= 50:
         raise ValueError("overlay.max_lines must be between 1 and 50")
-    if not 8 <= cfg.overlay_min_font_size <= 48:
-        raise ValueError("overlay.min_font_size must be between 8 and 48")
-    if not 0 <= cfg.overlay_font_steps <= 5:
-        raise ValueError("overlay.font_steps must be between 0 and 5")
+    if cfg.overlay_initial_lines > cfg.overlay_max_lines:
+        raise ValueError("overlay.initial_lines must not exceed overlay.max_lines")
     if not 0.0 <= cfg.overlay_background_opacity <= 1.0:
         raise ValueError("overlay.background_opacity must be between 0 and 1")
 

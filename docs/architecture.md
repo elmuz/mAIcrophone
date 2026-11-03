@@ -59,7 +59,8 @@ maic CLI  --Unix socket-->  maic daemon
   overlay shows an `EN`/`IT`/`AUTO` badge.
 - Clipboard fallback if injection fails or focus changed.
 - Overlay appears on the **currently focused monitor** at recording start.
-- Overlay grows to show the whole transcript where practical.
+- Overlay starts compact, grows as the transcript wraps, then caps its height
+  and auto-scrolls to keep the newest lines visible.
 
 ### Shortcuts
 
@@ -195,10 +196,12 @@ Properties:
 
 Long-text policy:
 
-- Try to fit all text by growing the surface up to the max height (30%).
-- Show up to about 10 lines at the base font size.
-- If reducing font size by 1–3 steps makes the transcript fit, do that.
-- Otherwise keep the newest lines visible and auto-scroll to the bottom.
+- Keep one fixed transcript font size; never shrink text to fit more lines.
+- Start at `initial_lines` (default 2) and grow one wrapped line at a time as
+  text is added.
+- Stop growing at `max_lines` (default 8) or when the surface reaches 30% of the
+  output height, whichever comes first.
+- Keep the newest lines visible and auto-scroll to the bottom once capped.
 - No manual scrolling.
 - Do not reserve space for silence/pauses; only actual transcript text is shown.
 
@@ -375,8 +378,8 @@ These are the places where vague behaviour causes bugs. They are implemented,
 but keep them explicit when changing the code.
 
 1. **Overlay long-text contract**
-   - max height, minimum font size, wrapping, overflow behaviour,
-   - whether the overlay ever scrolls or offers a full-text mode,
+   - fixed font size, initial/max visible lines, wrapping, max height,
+   - auto-scroll behaviour and whether a full-text mode exists,
    - what happens on multi-monitor/output hotplug.
 
 2. **Session failure contract**

@@ -65,20 +65,12 @@ def _font_parts(font: str) -> tuple[str, int]:
     return family, max(8, round(size))
 
 
-def _font_steps(base: int, minimum: int, count: int) -> list[int]:
-    steps = [base]
-    for offset in range(1, count + 1):
-        size = max(minimum, base - offset)
-        if size < base and size not in steps:
-            steps.append(size)
-    return steps
-
-
 class Overlay:
     def __init__(self, cfg: Config):
         self.cfg = cfg
         self.layer_shell = _load_layer_shell()
         self.window: Gtk.Window | None = None
+        self.outer: Gtk.Box | None = None
         self.status_dot: Gtk.DrawingArea | None = None
         self.status_label: Gtk.Label | None = None
         self.waveform: Gtk.DrawingArea | None = None
@@ -110,9 +102,6 @@ class Overlay:
         self.language = language_label(cfg.language)
         self.server_status = "checking"
         self._font_family, self._font_base = _font_parts(cfg.overlay_font)
-        self._font_steps = _font_steps(
-            self._font_base, cfg.overlay_min_font_size, cfg.overlay_font_steps
-        )
         self.color_background = cfg.overlay_background_color
         self.color_border = cfg.overlay_border_color
         self.color_text = cfg.overlay_text_color
@@ -128,10 +117,6 @@ class Overlay:
     def _build_css(self) -> bytes:
         family = self._font_family.replace('"', '\\"')
         small_size = max(9, self._font_base - 4)
-        step_rules = "\n".join(
-            f".maic-text.font-step-{i} {{ font-size: {size}pt; }}"
-            for i, size in enumerate(self._font_steps[1:], start=1)
-        )
         opacity = self.cfg.overlay_background_opacity
         radius = self.cfg.overlay_corner_radius
         border = self.cfg.overlay_border_width
@@ -182,10 +167,7 @@ window.maic-overlay.csd:backdrop {{
     font-size: {self._font_base}pt;
     color: {self.color_text};
 }}
-{step_rules}
 .maic-error {{
-    font-family: "{family}";
-    font-size: {max(self._font_base - 2, self.cfg.overlay_min_font_size)}pt;
     color: {self.color_error};
 }}
 scrolledwindow {{
@@ -210,8 +192,8 @@ scrollbar {{
         self.window.set_can_target(False)
         self.window.connect("realize", self._on_realize)
 
-        outer = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
-        outer.add_css_class("maic-box")
+        self.outer = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        self.outer.add_css_class("maic-box")
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
 
         header = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
@@ -295,8 +277,8 @@ scrollbar {{
         box.append(header)
         box.append(footer)
         box.append(self.scroll)
-        outer.append(box)
-        self.window.set_child(outer)
+        self.outer.append(box)
+        self.window.set_child(self.outer)
 
         display = Gdk.Display.get_default()
         if display is not None:
@@ -335,45 +317,46 @@ scrollbar {{
                 return monitor
         return None
 
-    def _line_height(self, font_size: int) -> int:
-        return max(12, round(font_size * 1.45))
-
-    def _count_lines(self, text: str, font_size: int) -> int:
+    def _line_height(self) -> int:
         assert self.text is not None
         layout = Pango.Layout(self.text.get_pango_context())
         layout.set_font_description(
-            Pango.FontDescription.from_string(f"{self._font_family} {font_size}")
+            Pango.FontDescription.from_string(f"{self._font_family} {self._font_base}")
+        )
+        layout.set_text("Mg", -1)
+        return max(1, layout.get_pixel_size()[1])
+
+    def _measure_text(self, text: str) -> tuple[int, int, int]:
+        assert self.text is not None
+        layout = Pango.Layout(self.text.get_pango_context())
+        layout.set_font_description(
+            Pango.FontDescription.from_string(f"{self._font_family} {self._font_base}")
         )
         layout.set_width(self.content_width * Pango.SCALE)
         layout.set_wrap(Pango.WrapMode.WORD_CHAR)
         layout.set_text(text, -1)
-        return max(1, layout.get_line_count())
-
-    def _choose_font(self, text: str) -> tuple[int, int, int]:
-        lines = self._count_lines(text, self._font_steps[0])
-        if lines <= self.cfg.overlay_max_lines:
-            return 0, self._font_steps[0], lines
-        for step, size in enumerate(self._font_steps[1:], start=1):
-            candidate = self._count_lines(text, size)
-            if candidate <= self.cfg.overlay_max_lines:
-                return step, size, candidate
-        return 0, self._font_steps[0], lines
+        lines = max(1, layout.get_line_count())
+        line_height = self._line_height()
+        for index in range(lines):
+            _, logical = layout.get_line(index).get_pixel_extents()
+            line_height = max(line_height, logical.height)
+        _, natural_height = layout.get_pixel_size()
+        return lines, line_height, max(1, natural_height)
 
     def _apply_text(self, text: str) -> None:
         assert self.text is not None and self.window is not None
-        assert self.scroll is not None
-        step, font_size, lines = self._choose_font(text)
-        for i in range(1, len(self._font_steps)):
-            self.text.remove_css_class(f"font-step-{i}")
-        if step:
-            self.text.add_css_class(f"font-step-{step}")
-
-        line_height = self._line_height(font_size)
-        chrome_height = 96
-        available_lines = max(1, (self.max_height - chrome_height) // line_height)
-        visible_lines = max(1, min(lines, self.cfg.overlay_max_lines, available_lines))
-        text_height = visible_lines * line_height
-        total_height = min(self.max_height, chrome_height + text_height)
+        assert self.scroll is not None and self.outer is not None
+        # Estimate the viewport from real Pango metrics and let GTK measure the
+        # chrome. Fixed font-size multipliers make the viewport a few pixels
+        # short, which shows scrolling before the text actually fills the box.
+        lines, line_height, natural_text_height = self._measure_text(text)
+        if lines <= self.cfg.overlay_max_lines:
+            text_height = max(
+                self.cfg.overlay_initial_lines * line_height,
+                natural_text_height,
+            )
+        else:
+            text_height = self.cfg.overlay_max_lines * line_height
 
         if self._text_final:
             markup = f'<span foreground="{self.color_text}">{escape(text)}</span>' if text else ""
@@ -394,6 +377,8 @@ scrollbar {{
         self.scroll.set_max_content_height(-1)
         self.scroll.set_max_content_height(text_height)
         self.scroll.set_min_content_height(text_height)
+        _, natural_height, _, _ = self.outer.measure(Gtk.Orientation.VERTICAL, self.width)
+        total_height = min(self.max_height, natural_height)
         self.window.set_size_request(self.width, total_height)
         self.window.set_default_size(self.width, total_height)
         self.window.queue_resize()

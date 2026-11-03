@@ -19,6 +19,33 @@ class ConfigTests(unittest.TestCase):
             "http://127.0.0.1:8080/ready",
         )
 
+    def test_overlay_line_defaults(self):
+        cfg = Config()
+        self.assertEqual(cfg.overlay_initial_lines, 2)
+        self.assertEqual(cfg.overlay_max_lines, 8)
+
+    def test_overlay_line_settings_are_loaded(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "config.toml"
+            path.write_text(
+                "[overlay]\ninitial_lines = 3\nmax_lines = 6\n",
+                encoding="utf-8",
+            )
+            cfg = load_config(path)
+
+        self.assertEqual(cfg.overlay_initial_lines, 3)
+        self.assertEqual(cfg.overlay_max_lines, 6)
+
+    def test_overlay_initial_lines_cannot_exceed_max_lines(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "config.toml"
+            path.write_text(
+                "[overlay]\ninitial_lines = 9\nmax_lines = 8\n",
+                encoding="utf-8",
+            )
+            with self.assertRaises(ValueError):
+                load_config(path)
+
     def test_ready_url_for_wss(self):
         cfg = Config(server_url="wss://example.test/v1/audio/transcriptions/realtime")
         self.assertEqual(cfg.ready_url, "https://example.test/ready")
