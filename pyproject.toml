@@ -42,6 +42,12 @@ select = ["E", "F", "I", "UP", "B", "RUF"]
 # cleanup boundaries where failures must not take down the daemon.
 ignore = ["BLE001"]
 
+[tool.uv]
+# The GTK overlay binds to distro-provided PyGObject/pycairo, which are built
+# for the system CPython. Prefer that interpreter over a uv-managed download so
+# the venv can see `gi` via --system-site-packages.
+python-preference = "system"
+
 [tool.ty.analysis]
 # GTK/PyGObject and cairo are optional, distro-provided overlay dependencies.
 allowed-unresolved-imports = ["gi.**", "cairo"]

@@ -39,14 +39,28 @@ not required at runtime. When a systemd user service does not inherit
 From a checkout:
 
 ```bash
-python -m venv --system-site-packages .venv
+uv venv --python 3.14 --system-site-packages .venv
 . .venv/bin/activate
-pip install -e '.[overlay]'
+uv pip install -e '.[overlay]'
 ```
 
-Use `pip install -e .` for a headless setup. `--system-site-packages` lets the
-virtual environment see distro packages such as `python-gobject` while pip
+Use `uv pip install -e .` for a headless setup. `--system-site-packages` lets
+the virtual environment see distro packages such as `python-gobject` while uv
 installs the `maic` entry point and `websockets`.
+
+The venv **must** be based on the distro CPython, not a uv-managed download.
+`python-gobject` and `python-cairo` ship compiled extensions for the system
+interpreter (for example `_gi.cpython-314-x86_64-linux-gnu.so`); a uv-managed
+3.12 venv cannot import them, and the daemon then exits at startup with
+`maic: No module named 'gi'`. The repository pins the interpreter in two
+places so `uv sync` keeps using the system Python:
+
+- `.python-version` contains `3.14`;
+- `pyproject.toml` sets `[tool.uv] python-preference = "system"`.
+
+`uv sync --locked` preserves the existing `--system-site-packages` venv as long
+as its interpreter matches the pin. If you ever recreate the venv, use the
+`uv venv` command above rather than a bare `uv sync`.
 
 Install the cased Sparrowhawk ITN grammars once if you want inverse text
 normalization. Grammars are loaded lazily; in NeMo-Speech 0.2.0 the Italian
@@ -253,6 +267,10 @@ without destabilising the daemon.
 
 - Under systemd, inspect `journalctl --user -u maic -f` and
   `journalctl --user -u maic-server -f`.
+- `maic: No module named 'gi'` means the venv is not based on the distro
+  CPython or was created without `--system-site-packages`. Recreate it with
+  `uv venv --python 3.14 --system-site-packages .venv` and reinstall the
+  `.[overlay]` extra; see [Local setup](#local-setup).
 - For overlay placement issues, verify `LD_PRELOAD` is set to
   `/usr/lib/libgtk4-layer-shell.so` in the daemon environment.
 - If the ASR server is offline, the daemon fails before recording rather than

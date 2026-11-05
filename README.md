@@ -77,16 +77,17 @@ the ASR server and the optional ITN grammars.
 ### 2. Install mAIcrophone
 
 ```bash
-python -m venv --system-site-packages .venv
+uv venv --python 3.14 --system-site-packages .venv
 . .venv/bin/activate
-pip install -e .
+uv pip install -e '.[overlay]'
 ```
 
-For the overlay, install the Python extra:
-
-```bash
-pip install -e '.[overlay]'
-```
+Use `uv pip install -e .` for a headless setup. The venv must be based on the
+**system** CPython and see system site packages: `python-gobject` and
+`python-cairo` are compiled for the distro interpreter, so a uv-managed Python
+cannot import `gi`. The repository pins `3.14` in `.python-version` and sets
+`python-preference = "system"` in `pyproject.toml` to keep `uv sync` on the
+distro interpreter.
 
 ### 3. Configure and run
 
