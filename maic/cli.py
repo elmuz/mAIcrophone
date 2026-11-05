@@ -166,7 +166,11 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser("cancel", help="discard the current recording")
     sub.add_parser("status", help="print daemon state")
     language_cmd = sub.add_parser("language", help="get or set the ASR language")
-    language_cmd.add_argument("code", nargs="?", help="e.g. en-US, it-IT, auto")
+    language_cmd.add_argument(
+        "code",
+        nargs="?",
+        help="e.g. en-US, it-IT, auto, or next to cycle favourite languages",
+    )
     type_cmd = sub.add_parser("type", help="type text via the daemon (diagnostic)")
     type_cmd.add_argument("text")
     punctuate = sub.add_parser(

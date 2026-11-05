@@ -13,6 +13,8 @@ class ConfigTests(unittest.TestCase):
     def test_defaults(self):
         cfg = Config()
         self.assertEqual(cfg.language, "en-US")
+        self.assertEqual(cfg.languages, ())
+        self.assertEqual(cfg.language_cycle, ("en-US",))
         self.assertEqual(cfg.chunk_bytes, 3200)
         self.assertEqual(
             cfg.ready_url,
@@ -129,6 +131,40 @@ cancel = "#fe8019"
             with self.assertRaises(ValueError):
                 load_config(path)
 
+    def test_language_cycle_keeps_default_first(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "config.toml"
+            path.write_text(
+                """
+[asr]
+language = "it-IT"
+languages = ["auto", "it-IT", "en-US", "it-IT"]
+""",
+                encoding="utf-8",
+            )
+            cfg = load_config(path)
+
+        self.assertEqual(cfg.language, "it-IT")
+        self.assertEqual(cfg.languages, ("it-IT", "auto", "en-US"))
+
+    def test_language_cycle_adds_default_when_missing(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "config.toml"
+            path.write_text(
+                '[asr]\nlanguage = "en-US"\nlanguages = ["it-IT", "auto"]\n',
+                encoding="utf-8",
+            )
+            cfg = load_config(path)
+
+        self.assertEqual(cfg.language_cycle, ("en-US", "it-IT", "auto"))
+
+    def test_invalid_language_cycle_is_rejected(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "config.toml"
+            path.write_text('[asr]\nlanguages = "en-US"\n', encoding="utf-8")
+            with self.assertRaises(ValueError):
+                load_config(path)
+
     def test_environment_overrides_file(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "config.toml"
@@ -148,6 +184,19 @@ cancel = "#fe8019"
 
         self.assertEqual(cfg.server_url, "ws://127.0.0.1:2222/v1/audio/x")
         self.assertEqual(cfg.language, "auto")
+        self.assertEqual(cfg.language_cycle, ("auto",))
+
+    def test_environment_language_is_first_in_cycle(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "config.toml"
+            path.write_text(
+                '[asr]\nlanguage = "en-US"\nlanguages = ["en-US", "it-IT"]\n',
+                encoding="utf-8",
+            )
+            with patch.dict(os.environ, {"MAIC_LANGUAGE": "auto"}, clear=False):
+                cfg = load_config(path)
+
+        self.assertEqual(cfg.language_cycle, ("auto", "en-US", "it-IT"))
 
 
 if __name__ == "__main__":

@@ -56,7 +56,9 @@ maic CLI  --Unix socket-->  maic daemon
 - Partial text is **not** typed into the target app.
 - One final transcript per session. No endpointing/multiple finals in v1.
 - `language=en-US` by default; per-session switching via `maic language`;
-  overlay shows an `EN`/`IT`/`AUTO` badge.
+  `maic language next` cycles the configured favourite languages. The overlay
+  shows the language for the next session. The value is daemon-wide, not
+  per-window.
 - Clipboard fallback if injection fails or focus changed.
 - Overlay appears on the **currently focused monitor** at recording start.
 - Overlay starts compact, grows as the transcript wraps, then caps its height
@@ -70,6 +72,7 @@ the user chooses compositor bindings that do not conflict with existing ones:
 ```kdl
 Mod+Alt+V            { spawn "maic" "toggle"; }
 Mod+Alt+Shift+V      { spawn "maic" "cancel"; }
+Mod+Alt+L            { spawn "maic" "language" "next"; }
 Mod+Alt+Period       { spawn "maic" "punctuate" "period"; }
 Mod+Alt+Shift+Period { spawn "maic" "punctuate" "question"; }
 ```
@@ -211,8 +214,9 @@ session.
 Why focusless: the editor/`pi` prompt must keep keyboard focus. If the overlay
 takes focus, `wtype` would type into the overlay instead of the target.
 
-Consequence: cancel/language actions must be **global shortcuts**, not keys
-handled by the overlay.
+Consequence: cancel and language actions must be **global shortcuts**, not keys
+handled by the overlay. Language cycling changes the next session; it is not
+sent as a mid-session `session.update`.
 
 Candidate implementations:
 
@@ -350,8 +354,8 @@ primary feedback surface.
 4. **Focus-change behaviour**
    - abort + clipboard (recommended), or type anyway, or ask via overlay.
 5. **MVP scope**
-   - Niri, Sway, and Hyprland; one monitor, explicit language by default, one
-     final per session, no history.
+   - Niri, Sway, and Hyprland; one monitor, explicit language by default with
+     a favourite-language cycle, one final per session, no history.
 6. **Fallback policy**
    - wtype primary; clipboard on failure/focus change (recommended).
 7. **Server lifecycle**

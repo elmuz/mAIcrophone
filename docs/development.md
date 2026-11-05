@@ -109,6 +109,7 @@ maic toggle
 maic cancel
 maic language
 maic language it-IT
+maic language next
 maic type "diagnostic text"
 maic punctuate period
 maic punctuate question

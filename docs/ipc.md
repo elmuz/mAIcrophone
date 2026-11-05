@@ -46,7 +46,7 @@ Supported commands:
 | `toggle` | `clipboard` (boolean, default `false`) | Start recording when idle; stop and commit when recording/starting. |
 | `stop` | none | Stop and commit the current recording. No-op when idle. |
 | `cancel` | none | Discard the current recording without injecting text. |
-| `language` | `language` (string, optional) | With a non-empty value, set the next session's ASR language. Without one, read the current value. `auto` means model detection. |
+| `language` | `language` (string, optional) | With a non-empty value, set the next session's ASR language. Without one, read the current value. `auto` means model detection. `next` or `cycle` advances through the configured favourite languages. |
 | `type` | `text` (string, required) | Diagnostic direct injection through the configured injector. |
 | `punctuate` | `mark` (string, required) | Attach `.` or `?` to the sentence currently being dictated. Accepts `period`, `question`, `.`, or `?`. While recording, the mark is anchored to the visible partial and inserted into the final transcript at stop; when idle it is typed at the cursor only if the last target window still has focus. |
 
@@ -55,6 +55,7 @@ Examples:
 ```json
 {"protocol": 1, "command": "toggle", "clipboard": true}
 {"protocol": 1, "command": "language", "language": "it-IT"}
+{"protocol": 1, "command": "language", "language": "next"}
 {"protocol": 1, "command": "language"}
 {"protocol": 1, "command": "type", "text": "hello"}
 {"protocol": 1, "command": "punctuate", "mark": "period"}
@@ -112,6 +113,7 @@ The CLI prints the `error` text and exits non-zero for any failed response.
   "ok": true,
   "state": "idle",
   "language": "en-US",
+  "languages": ["en-US", "it-IT", "auto"],
   "server_ready": true,
   "server_status": "online",
   "overlay": true,
@@ -125,6 +127,7 @@ Fields:
 - `state`: one of `idle`, `starting`, `recording`, `stopping`,
   `cancelling`, `injecting`.
 - `language`: the language that will be sent for the next session.
+- `languages`: the favourite-language cycle, default language first.
 - `server_ready`: `true`, `false`, or `null` before the first readiness probe.
 - `server_status`: derived from `server_ready`: `online`, `offline`, or
   `checking`.

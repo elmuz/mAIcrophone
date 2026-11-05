@@ -205,6 +205,7 @@ class DaemonDispatchTests(unittest.TestCase):
         self.assertEqual(response["state"], State.IDLE)
         self.assertEqual(response["state"], "idle")
         self.assertEqual(response["language"], "en-US")
+        self.assertEqual(response["languages"], ["en-US"])
         self.assertTrue(response["server_ready"])
         self.assertEqual(response["server_status"], "online")
         self.assertIsNone(response["session"])
@@ -228,6 +229,28 @@ class DaemonDispatchTests(unittest.TestCase):
         self.assertEqual(response, ok(language="it-IT"))
         self.assertEqual(daemon.cfg.language, "it-IT")
         self.assertEqual(overlay.languages, ["it-IT"])
+
+    def test_language_next_cycles_favourites_and_wraps(self):
+        daemon, _, overlay = make_daemon()
+        daemon.cfg.languages = ("en-US", "it-IT", "auto")
+
+        seen = []
+        for _ in range(4):
+            response = asyncio.run(daemon.dispatch(make_request("language", language="next")))
+            seen.append(response["language"])
+
+        self.assertEqual(seen, ["it-IT", "auto", "en-US", "it-IT"])
+        self.assertEqual(overlay.languages, seen)
+        self.assertEqual(daemon.cfg.language, "it-IT")
+
+    def test_language_cycle_alias_and_unknown_current_value(self):
+        daemon, _, _ = make_daemon()
+        daemon.cfg.languages = ("en-US", "it-IT", "auto")
+        daemon.cfg.language = "fr-FR"
+
+        response = asyncio.run(daemon.dispatch(make_request("language", language="cycle")))
+
+        self.assertEqual(response["language"], "en-US")
 
     def test_type_requires_a_string(self):
         daemon, injection, _ = make_daemon()

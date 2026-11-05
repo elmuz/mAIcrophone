@@ -41,7 +41,8 @@ backends. Missing features are tracked in [docs/backlog.md](docs/backlog.md).
 - **Pluggable backends** for compositor, audio capture, text injection, ASR,
   and overlay. Batch ASR servers such as whisper.cpp and OpenAI-compatible
   endpoints are also supported.
-- **Per-session language switching** (`en-US`, `it-IT`, `auto`, …) from the CLI.
+- **Per-session language switching** (`en-US`, `it-IT`, `auto`, …) from the CLI,
+  with a favourite-language cycle (`maic language next`) for a global shortcut.
 - **Safe text injection** with `wtype`: the original target window is restored
   if focus moved during dictation, and the transcript can also be copied to the
   clipboard and PRIMARY selection.
@@ -103,6 +104,7 @@ In another shell:
 maic toggle             # start recording; call again to stop and type
 maic cancel             # discard the current recording
 maic status             # show daemon state
+maic language next      # cycle favourite languages for the next dictation
 maic punctuate period   # add . at the visible sentence while recording
 maic punctuate question # add ? at the visible sentence while recording
 ```
@@ -112,6 +114,7 @@ Add the shortcuts to your compositor configuration. Niri:
 ```kdl
 Mod+Alt+V            { spawn "maic" "toggle"; }
 Mod+Alt+Shift+V      { spawn "maic" "cancel"; }
+Mod+Alt+L            { spawn "maic" "language" "next"; }
 Mod+Alt+Period       { spawn "maic" "punctuate" "period"; }
 Mod+Alt+Shift+Period { spawn "maic" "punctuate" "question"; }
 ```
@@ -121,6 +124,7 @@ Sway:
 ```ini
 bindsym $mod+Mod1+v exec maic toggle
 bindsym $mod+Mod1+Shift+v exec maic cancel
+bindsym $mod+Mod1+l exec maic language next
 bindsym $mod+Mod1+period exec maic punctuate period
 bindsym $mod+Mod1+Shift+period exec maic punctuate question
 ```
@@ -130,6 +134,7 @@ Hyprland:
 ```ini
 bind = $mainMod ALT, V, exec, maic toggle
 bind = $mainMod ALT SHIFT, V, exec, maic cancel
+bind = $mainMod ALT, L, exec, maic language next
 bind = $mainMod ALT, period, exec, maic punctuate period
 bind = $mainMod ALT SHIFT, period, exec, maic punctuate question
 ```
@@ -154,8 +159,8 @@ configuration options, see [docs/configuration.md](docs/configuration.md).
 
 - Compositor focus integration is available for Niri, Sway, and Hyprland. Other
   Wayland compositors need a compositor backend or a generic fallback.
-- The overlay does not accept input; language and cancel actions are global
-  shortcuts.
+- The overlay does not accept input; language cycling and cancel actions are
+  global shortcuts. The language is daemon-wide and affects the next session.
 - The overlay keeps a fixed transcript font size, grows from a compact initial
   height up to a line cap, then auto-scrolls long transcripts; there is no
   manual scrolling.

@@ -228,6 +228,7 @@ class Daemon:
         return {
             "state": self.state,
             "language": self.cfg.language,
+            "languages": list(self.cfg.language_cycle),
             "server_ready": self.server_ready,
             "server_status": server_status,
             "overlay": bool(self.cfg.overlay_enabled and self.cfg.backend_overlay != "null"),
@@ -252,6 +253,13 @@ class Daemon:
         code = value.strip()
         if not code:
             return ok(language=self.cfg.language)
+        if code.lower() in {"next", "cycle"}:
+            cycle = self.cfg.language_cycle
+            try:
+                index = cycle.index(self.cfg.language)
+            except ValueError:
+                index = -1
+            code = cycle[(index + 1) % len(cycle)]
         self.cfg.language = code
         self.overlay.set_language(code)
         log.info("language set to %s", code)

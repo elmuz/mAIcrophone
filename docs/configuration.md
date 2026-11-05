@@ -62,6 +62,7 @@ chunk_ms = 100
 
 [asr]
 language = "en-US"
+languages = ["en-US", "it-IT", "auto"]
 punctuation = true
 
 [overlay]
@@ -233,21 +234,37 @@ accent = "#d79921"
 
 ## Languages and ITN
 
-The default language is `en-US`. Language is per session:
+`asr.language` is the default language used when the daemon starts. A session
+uses the current language; changing it affects the next dictation without
+restarting the ASR server or editing the config file:
 
 ```bash
 maic language          # show current value
 maic language en-US
 maic language it-IT
 maic language auto
+maic language next     # cycle through the favourite languages
 ```
 
-Changing it affects the next dictation without restarting the ASR server.
-The overlay shows `EN`, `IT`, or `AUTO`.
+`asr.languages` is the favourite-language cycle used by `maic language next`
+(and its alias `cycle`). The default language is always the first entry,
+regardless of where it appears in the list; duplicates and empty entries are
+ignored. An omitted `languages` list means the default language alone.
 
-Inverse text normalization requires the external cased grammars. In
-NeMo-Speech 0.2.0 the Italian grammar directory is present but empty, so
-Italian ITN is unavailable. Installation is covered in
+```toml
+[asr]
+language = "en-US"
+languages = ["en-US", "it-IT", "auto"]
+```
+
+The daemon starts on `en-US` above. Each `maic language next` advances to
+`it-IT`, then `auto`, then wraps back to `en-US`. The overlay always shows the
+language that the next session will use. It is still one daemon-wide value;
+there is no per-window or per-chat language.
+
+Inverse text normalization requires the external cased grammars. Check the
+release notes for your NeMo-Speech version; older releases had an empty Italian
+grammar directory, so Italian ITN was unavailable. Installation is covered in
 [development.md](development.md#local-setup).
 
 ## Compositor bindings
@@ -259,6 +276,7 @@ Niri (`~/.config/niri/config.kdl`):
 ```kdl
 Mod+Alt+V            { spawn "maic" "toggle"; }
 Mod+Alt+Shift+V      { spawn "maic" "cancel"; }
+Mod+Alt+L            { spawn "maic" "language" "next"; }
 Mod+Alt+Period       { spawn "maic" "punctuate" "period"; }
 Mod+Alt+Shift+Period { spawn "maic" "punctuate" "question"; }
 ```
@@ -268,6 +286,7 @@ Sway (`~/.config/sway/config`):
 ```ini
 bindsym $mod+Mod1+v exec maic toggle
 bindsym $mod+Mod1+Shift+v exec maic cancel
+bindsym $mod+Mod1+l exec maic language next
 bindsym $mod+Mod1+period exec maic punctuate period
 bindsym $mod+Mod1+Shift+period exec maic punctuate question
 ```
@@ -277,19 +296,22 @@ Hyprland (`~/.config/hypr/hyprland.conf`):
 ```ini
 bind = $mainMod ALT, V, exec, maic toggle
 bind = $mainMod ALT SHIFT, V, exec, maic cancel
+bind = $mainMod ALT, L, exec, maic language next
 bind = $mainMod ALT, period, exec, maic punctuate period
 bind = $mainMod ALT SHIFT, period, exec, maic punctuate question
 ```
 
 `maic toggle` starts recording when idle and stops-and-types when recording.
-`maic cancel` discards the current recording. The optional `maic punctuate
-period|question` binds attach `.` or `?` to the sentence currently visible in
-the overlay; the same command only types at the cursor when idle if the last
-target window still has focus. Additional commands:
+`maic cancel` discards the current recording. `maic language next` cycles the
+favourite languages and affects the next recording. The optional `maic
+punctuate period|question` binds attach `.` or `?` to the sentence currently
+visible in the overlay; the same command only types at the cursor when idle if
+the last target window still has focus. Additional commands:
 
 ```bash
 maic status
 maic stop
+maic language next
 maic type "hello"
 maic punctuate period
 maic punctuate question

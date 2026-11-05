@@ -20,8 +20,13 @@ sample_rate = 16000
 chunk_ms = 100
 
 [asr]
-# Per-session language. Use "auto" for model-based detection.
+# Default language used when the daemon starts. Use "auto" for model-based
+# detection.
 language = "en-US"
+# Favourite languages visited by `maic language next` (or `cycle`). The
+# default language above is always the first entry, regardless of its place
+# in this list. An omitted list means the default language alone.
+languages = ["en-US", "it-IT", "auto"]
 punctuation = true
 
 # Batch (non-streaming) engines buffer audio and transcribe when you stop.

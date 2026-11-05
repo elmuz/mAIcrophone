@@ -19,6 +19,9 @@ class Config:
     server_url: str = "ws://127.0.0.1:8080/v1/audio/transcriptions/realtime"
     server_poll_seconds: int = 5
     language: str = "en-US"
+    # Favourite languages for `maic language next`. The default language is
+    # always the first entry; an empty list means the default alone.
+    languages: tuple[str, ...] = ()
     punctuation: bool = True
     # Batch (non-streaming) engines. Empty batch_url derives an endpoint from
     # server.url when that URL is HTTP(S), otherwise from batch_protocol.
@@ -66,6 +69,11 @@ class Config:
     replacements: dict[str, str] = field(default_factory=dict)
 
     @property
+    def language_cycle(self) -> tuple[str, ...]:
+        """Languages visited by `maic language next`, default first."""
+        return self.languages or (self.language,)
+
+    @property
     def chunk_bytes(self) -> int:
         return int(self.sample_rate * 2 * self.chunk_ms / 1000)
 
@@ -91,6 +99,25 @@ def config_path() -> Path:
 def _section(raw: dict, name: str) -> dict:
     value = raw.get(name, {})
     return value if isinstance(value, dict) else {}
+
+
+def _language_cycle(value, default: str) -> tuple[str, ...]:
+    """Normalize `asr.languages`, keeping the default language first."""
+    if value is None:
+        return (default,)
+    if not isinstance(value, list) or any(not isinstance(item, str) for item in value):
+        raise ValueError("asr.languages must be a list of language code strings")
+    codes: list[str] = []
+    for item in value:
+        code = item.strip()
+        if code and code not in codes:
+            codes.append(code)
+    if default not in codes:
+        codes.insert(0, default)
+    elif codes[0] != default:
+        codes.remove(default)
+        codes.insert(0, default)
+    return tuple(codes)
 
 
 def _color_value(value, default: str, key: str) -> str:
@@ -127,6 +154,7 @@ def load_config(path: Path | None = None) -> Config:
     cfg.server_url = str(server.get("url", cfg.server_url))
     cfg.server_poll_seconds = int(server.get("poll_seconds", cfg.server_poll_seconds))
     cfg.language = str(asr.get("language", cfg.language))
+    raw_languages = asr.get("languages")
     cfg.punctuation = bool(asr.get("punctuation", cfg.punctuation))
     cfg.batch_url = str(asr.get("batch_url", cfg.batch_url))
     cfg.batch_ready_url = str(asr.get("batch_ready_url", cfg.batch_ready_url))
@@ -204,6 +232,7 @@ def load_config(path: Path | None = None) -> Config:
     env_lang = os.environ.get("MAIC_LANGUAGE")
     if env_lang:
         cfg.language = env_lang
+    cfg.languages = _language_cycle(raw_languages, cfg.language)
 
     if cfg.backend_compositor not in COMPOSITOR_PROVIDERS:
         raise ValueError(

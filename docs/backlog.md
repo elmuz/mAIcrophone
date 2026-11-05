@@ -18,6 +18,9 @@ features and known gaps.
 
 ## Recently landed
 
+- Favourite-language cycling via `maic language next` and an example compositor
+  shortcut. The default language remains the first entry and the language is
+  still daemon-wide.
 - Manual `.` / `?` insertion via `maic punctuate` and a global shortcut.
   While recording, the mark is anchored to the partial transcript visible in
   the overlay and inserted into the final at that sentence boundary. When idle
@@ -35,7 +38,9 @@ features and known gaps.
   events; the current LCP heuristic cannot reliably detect a revision that
   changes only the first characters.
 - Endpointing, multiple finals per session, transcript history.
-- Language selector in the overlay; language switching is currently CLI-only.
+- Per-window or per-application language profiles. The current language is
+  daemon-wide; favourite-language cycling is available through
+  `maic language next` and a compositor shortcut.
 
 ## Explicitly skipped for now
 
